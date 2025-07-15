@@ -1,95 +1,107 @@
 // app/page.js
 import Link from "next/link"; // Next.js Link bileşenini içeri aktarıyoruz.
-import Image from "next/image"; // Eğer logo veya başka görseller kullanacaksak Image bileşeni için (şimdilik bu kodda kullanılmıyor ama ek bilgi)
+import Image from "next/image"; // Görsel kullanacağımız için Image bileşenini içeri aktarıyoruz.
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-gray-900"> {/* Arkaplanı beyaz, varsayılan metni koyu gri yaptık */}
+    <main className="min-h-screen bg-white text-gray-900 flex flex-col items-center"> {/* Arkaplanı beyaz, varsayılan metni koyu gri yaptık, flex ile dikeyde ortalama */}
 
       {/* Hero Bölümü (En Üst Kısım) */}
-      <section className="relative h-screen flex items-center justify-center bg-blue-600 text-white overflow-hidden p-8">
+      <section className="relative h-screen w-full flex items-center justify-center bg-blue-600 text-white overflow-hidden p-8">
         {/* Arka plan görseli - Placeholder, gerçek görsel yolu buraya gelecek */}
-        {/* Şimdilik basit bir degrade veya renk bırakalım, isterseniz buraya gerçek bir inşaat görseli ekleyebiliriz */}
         <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-500 opacity-90"></div>
-        {/* Eğer logo görseli kullanacaksanız Image bileşenini buraya ekleyebilirsiniz */}
-        {/* <Image src="/path/to/your/logo.png" alt="Zemta İnşaat Logo" width={150} height={150} className="absolute top-8 left-8" /> */}
 
-        <div className="relative text-center z-10">
+        <div className="relative text-center z-10 p-4"> {/* İç boşluk ekledim */}
           {/* Ana Başlık */}
           <h1 className="text-6xl md:text-7xl lg:text-8xl font-extrabold mb-4 leading-tight">
             Zemta İnşaat &amp; Hafriyat
           </h1>
           {/* Slogan */}
-          <p className="text-xl md:text-2xl lg:text-3xl font-medium mt-4">
+          <p className="text-xl md:text-2xl lg:text-3xl font-medium mt-4 max-w-3xl mx-auto"> {/* Max genişlik ve ortalama */}
             Toprağa değer, geleceğe yön verir.
           </p>
-        </div>
+        </div> 
       </section>
 
-      {/* Hizmetler Bölümü */}
-      <section className="py-16 px-8 bg-gray-50">
-        <h2 className="text-4xl font-bold text-center mb-12 text-gray-800">Hizmetlerimiz</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {/* Çevre Düzenleme */}
-          <div className="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-            <h3 className="text-2xl font-semibold mb-2 text-gray-800">Çevre Düzenleme</h3>
-            <p className="mb-4 text-gray-700 font-normal">
-              Doğal dokularla modern yaşam alanları tasarlıyoruz. Peyzajdan izolasyona kadar kapsamlı çevre çözümleri.
-            </p>
-            <Link href="/cevre-duzenleme" className="mt-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-300">
-              Detaylı Bilgi
-            </Link>
+      {/* HİZMETLER BÖLÜMÜ - İSTEDİĞİN GÖRSELLİ KUTUCUKLAR VE METİN HİZALAMALARI DÜZELTİLMİŞ HALİ */}
+      <section className="w-full max-w-6xl mx-auto py-16 px-8"> {/* mx-auto ile ortalama, py ve px ile boşluk */}
+        <h2 className="text-5xl font-extrabold text-center text-gray-900 mb-12 relative pb-4">
+          Hizmetlerimiz
+          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-blue-600 rounded-full"></span> {/* Alt çizgi */}
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+          {/* Hizmet Kartı 1: Çevre Düzenleme */}
+          <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-cevre.jpg')" }}></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+              <h3 className="text-3xl font-bold mb-2">Çevre Düzenleme</h3>
+              <p className="text-lg mb-4 leading-tight">Doğal dokularla modern yaşam alanları tasarlıyoruz. Peyzajdan izolasyona kadar kapsamlı çevre çözümleri.</p>
+              <Link href="/cevre-duzenleme" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                Detaylı Bilgi
+              </Link>
+            </div>
           </div>
 
-          {/* Elektrik Tesisatı */}
-          <div className="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-            <h3 className="text-2xl font-semibold mb-2 text-gray-800">Elektrik Tesisatı</h3>
-            <p className="mb-4 text-gray-700 font-normal">
-              Bahçe aydınlatmadan mekanik tava pano sistemlerine kadar modern elektrik tesisat çözümleri.
-            </p>
-            <Link href="/elektrik-tesisati" className="mt-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-300">
-              Detaylı Bilgi
-            </Link>
+          {/* Hizmet Kartı 2: Elektrik Tesisatı */}
+          <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-elektrik.jpg')" }}></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+              <h3 className="text-3xl font-bold mb-2">Elektrik Tesisatı</h3>
+              <p className="text-lg mb-4 leading-tight">Bahçe aydınlatmadan mekanik tava pano sistemlerine kadar modern elektrik tesisat çözümleri.</p>
+              <Link href="/elektrik-tesisati" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                Detaylı Bilgi
+              </Link>
+            </div>
           </div>
 
-          {/* Karakalem Sanatı */}
-          <div className="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-            <h3 className="text-2xl font-semibold mb-2 text-gray-800">Karakalem Sanatı</h3>
-            <p className="mb-4 text-gray-700 font-normal">
-              Duvarlara değer katan özel portre çizimleri. Yaşlı, kadın, çocuk figürleriyle sanatı yaşam alanına taşı.
-            </p>
-            <Link href="/karakalem-sanati" className="mt-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-300">
-              Detaylı Bilgi
-            </Link>
+          {/* Hizmet Kartı 3: Karakalem Sanatı */}
+          <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-karakale.jpg')" }}></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+              <h3 className="text-3xl font-bold mb-2">Karakalem Sanatı</h3>
+              <p className="text-lg mb-4 leading-tight">Duvarlara değer katan özel portre çizimleri. Yaşlı, kadın, çocuk figürleriyle sanatı yaşam alanına taşı.</p>
+              <Link href="/karakalem-sanati" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                Detaylı Bilgi
+              </Link>
+            </div>
           </div>
 
-          {/* Parke Döşeme */}
-          <div className="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-            <h3 className="text-2xl font-semibold mb-2 text-gray-800">Parke Döşeme</h3>
-            <p className="mb-4 text-gray-700 font-normal">
-              Modern parke çözümleri, renk uyumu, teknik uygulama ve örnek çalışmalar.
-            </p>
-            <Link href="/parke-doseme" className="mt-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-300">
-              Detaylı Bilgi
-            </Link>
+          {/* Hizmet Kartı 4: Parke Döşeme */}
+          <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-parke.jpg')" }}></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+              <h3 className="text-3xl font-bold mb-2">Parke Döşeme</h3>
+              <p className="text-lg mb-4 leading-tight">Modern parke çözümleri, renk uyumu, teknik uygulama ve örnek çalışmalar.</p>
+              <Link href="/parke-doseme" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                Detaylı Bilgi
+              </Link>
+            </div>
           </div>
 
-          {/* E-Ticaret */}
-          <div className="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center text-center">
-            <h3 className="text-2xl font-semibold mb-2 text-gray-800">E-Ticaret</h3>
-            <p className="mb-4 text-gray-700 font-normal">
-              Dekoratif kare yastıklar ve erkek gömlek koleksiyonu.
-            </p>
-            <Link href="/e-ticaret" className="mt-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition duration-300">
-              Detaylı Bilgi
-            </Link>
+          {/* Hizmet Kartı 5: E-Ticaret */}
+          <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-eticaret.jpg')" }}></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+              <h3 className="text-3xl font-bold mb-2">E-Ticaret</h3>
+              <p className="text-lg mb-4 leading-tight">Dekoratif kare yastıklar ve erkek gömlek koleksiyonu.</p>
+              <Link href="/e-ticaret" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                Detaylı Bilgi
+              </Link>
+            </div>
           </div>
 
         </div>
       </section>
 
       {/* Hakkımızda Bölümü */}
-      <section className="py-16 px-8 bg-blue-50"> {/* Açık mavi arka plan */}
+      <section className="py-16 px-8 bg-blue-50 w-full"> {/* Açık mavi arka plan, w-full ekledim */}
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold mb-8 text-gray-800">Hakkımızda</h2>
           <p className="mb-4 text-lg text-gray-700 leading-relaxed">
@@ -110,7 +122,7 @@ export default function Home() {
           <p className="mb-4 text-lg text-gray-700 leading-relaxed">
             Kara kalem duvar sanatından e-ticaret çözümlerine, elektrik tesisatından modern parke döşemeye kadar geniş hizmet yelpazesiyle bireysel ve kurumsal müşterilere profesyonel çözümler sunmaktadır.
           </p>
-          <p className="mb-4 text-lg text-gray-700 leading-relaxed font-semibold">
+          <p className="mb-4 text-lg text-gray-700 font-semibold leading-relaxed">
             &quot;Toprağa değer, geleceğe yön verir.&quot; ilkesini benimseyerek;
           </p>
           <ul className="list-disc list-inside text-lg text-gray-700 mb-4 leading-relaxed mx-auto max-w-md">
@@ -129,17 +141,15 @@ export default function Home() {
       </section>
 
       {/* İletişim Bölümü */}
-      <section className="py-16 px-8 bg-gray-100"> {/* Gri arka plan */}
+      <section className="py-16 px-8 bg-gray-100 w-full"> {/* Gri arka plan, w-full ekledim */}
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold mb-8 text-gray-800">Bize Ulaşın</h2>
           <div className="flex flex-col items-center justify-center space-y-4 text-lg text-gray-700">
             <p className="flex items-center">
-              {/* Material Icons burada görünmez, zira Font Awesome gibi yüklenmiyor */}
               <span className="mr-2">📞</span> Telefon:{" "}
               <a href="tel:+905373235900" className="text-blue-600 hover:underline ml-1">0537 323 5900</a>
             </p>
             <p className="flex items-center">
-              {/* Material Icons burada görünmez */}
               <span className="mr-2">📧</span> E-posta:{" "}
               <a href="mailto:zamtainsaat@gmail.com" className="text-blue-600 hover:underline ml-1">zamtainsaat@gmail.com</a>
             </p>
@@ -173,7 +183,7 @@ export default function Home() {
       </section>
 
       {/* Alt Kısım (Footer) */}
-      <footer className="py-8 bg-gray-800 text-white text-center text-sm">
+      <footer className="py-8 bg-gray-800 text-white text-center text-sm w-full"> {/* w-full ekledim */}
         <p>&copy; {new Date().getFullYear()} Zemta İnşaat ve Hafriyat. Tüm Hakları Saklıdır.</p>
       </footer>
 
