@@ -8,7 +8,7 @@ import { format } from 'date-fns'; // Tarih formatlamak için (npm install date-
 
 // Firebase importları
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, deleteDoc, doc } from 'firebase/firestore';
 
 // Lucide-react ikonlarını dinamik olarak içeri aktarıyoruz.
@@ -22,14 +22,27 @@ const CheckCircle = dynamic(() => import("lucide-react").then(mod => mod.CheckCi
 const XCircle = dynamic(() => import("lucide-react").then(mod => mod.XCircle), { ssr: false }); // Hata mesajı için ikon
 const Trash2 = dynamic(() => import("lucide-react").then(mod => mod.Trash2), { ssr: false }); // Silme ikon
 const Eye = dynamic(() => import("lucide-react").then(mod => mod.Eye), { ssr: false }); // Detay gör ikon
+const LogIn = dynamic(() => import("lucide-react").then(mod => mod.LogIn), { ssr: false }); // Giriş ikon
+const LogOut = dynamic(() => import("lucide-react").then(mod => mod.LogOut), { ssr: false }); // Çıkış ikon
 
 
 export default function Home() {
   // Firebase ve Auth state'leri
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
-  const [userId, setUserId] = useState(null);
+  const [userId, setUserId] = useState(null); // Mevcut kullanıcının UID'si
   const [isAuthReady, setIsAuthReady] = useState(false); // Auth durumunun yüklenip yüklenmediğini kontrol eder
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false); // Yöneticinin giriş yapıp yapmadığını kontrol eder
+
+  // YÖNETİCİ UID'Sİ BURAYA GELECEK - KENDİ YÖNETİCİ HESABININ UID'Sİ İLE DEĞİŞTİR!
+  // Firebase Authentication'da oluşturduğun yönetici kullanıcının UID'si olacak.
+  const ADMIN_UID = "SENİN_YÖNETİCİ_UID'Nİ_BURAYA_YAPIŞTIR"; // Örn: "abcdef1234567890abcdef1234567890"
+
+  // Admin giriş formu state'leri
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminLoginError, setAdminLoginError] = useState("");
+
 
   // Form adımlarını, seçilen hizmetleri ve kullanıcı cevaplarını yönetmek için React state'leri tanımlıyoruz.
   const [currentStep, setCurrentStep] = useState(1); // Mevcut form adımını tutar (1, 2, 3, 4 veya 5).
@@ -72,8 +85,15 @@ export default function Home() {
       const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
         if (user) {
           setUserId(user.uid);
+          // Eğer giriş yapan kullanıcı admin UID'sine eşitse yönetici olarak işaretle
+          if (user.uid === ADMIN_UID) {
+            setIsAdminLoggedIn(true);
+            console.log("Admin olarak giriş yapıldı. UID:", user.uid); // Admin UID'yi konsolda görmek için
+          } else {
+            setIsAdminLoggedIn(false);
+          }
         } else {
-          // Eğer token yoksa veya geçersizse anonim olarak oturum aç
+          // Eğer token yoksa veya geçersizse anonim olarak oturum aç (normal kullanıcılar için)
           if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
             try {
               await signInWithCustomToken(authInstance, __initial_auth_token);
@@ -87,6 +107,7 @@ export default function Home() {
             await signInAnonymously(authInstance);
             setUserId(authInstance.currentUser.uid);
           }
+          setIsAdminLoggedIn(false);
         }
         setIsAuthReady(true); // Kimlik doğrulama hazır
       });
@@ -98,13 +119,12 @@ export default function Home() {
     }
   }, []);
 
-  // Firestore'dan talepleri çek (userId hazır olduğunda)
+  // Firestore'dan talepleri çek (userId ve isAdminLoggedIn hazır olduğunda)
   useEffect(() => {
-    if (!db || !userId || !isAuthReady) return;
+    if (!db || !userId || !isAuthReady || !isAdminLoggedIn) return; // Sadece admin girişliyse çek
 
-    // Kullanıcının kendi taleplerini ve genel talepleri çekmek için
-    // Güvenlik kurallarına göre sadece kendi taleplerini görebilir
-    const q = query(collection(db, `artifacts/${__app_id}/users/${userId}/requests`), orderBy("timestamp", "desc"));
+    // Tüm talepleri çeker (Firestore güvenlik kuralları ile sadece adminin okumasına izin vermelisin)
+    const q = query(collection(db, `artifacts/${__app_id}/public/requests`), orderBy("timestamp", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedRequests = snapshot.docs.map(doc => ({
@@ -114,10 +134,15 @@ export default function Home() {
       setRequests(fetchedRequests);
     }, (error) => {
       console.error("Talepler çekilirken hata oluştu:", error);
+      // Hata oluşursa (örn: yetkilendirme hatası), adminin çıkış yapmasını sağlayabiliriz
+      if (error.code === 'permission-denied') {
+        setAdminLoginError("Talepleri görüntüleme yetkiniz yok. Lütfen yönetici hesabıyla giriş yapın.");
+        signOut(auth); // Yetki hatasında çıkış yap
+      }
     });
 
     return () => unsubscribe(); // Cleanup
-  }, [db, userId, isAuthReady]);
+  }, [db, userId, isAuthReady, isAdminLoggedIn, auth, ADMIN_UID]); // ADMIN_UID'yi bağımlılık olarak ekledik
 
 
   // Web sitesinde sunulan hizmetlerin verileri ve her bir alt hizmete özel sorular.
@@ -248,13 +273,14 @@ export default function Home() {
       }
 
       try {
-        await addDoc(collection(db, `artifacts/${__app_id}/users/${userId}/requests`), {
+        // Talebi public/requests koleksiyonuna kaydet
+        await addDoc(collection(db, `artifacts/${__app_id}/public/requests`), {
           mainService: selectedMainService,
           subService: selectedSubService,
           answers: answers,
           contactInfo: contactInfo,
           timestamp: new Date().toISOString(), // ISO formatında zaman damgası
-          userId: userId // Talebi gönderen kullanıcı ID'si
+          submitterUserId: userId // Talebi gönderen kullanıcının UID'si (anonim veya admin)
         });
 
         // Başarı mesajını göster
@@ -292,13 +318,13 @@ export default function Home() {
 
   // Talebi silme fonksiyonu
   const handleDeleteRequest = async (requestId) => {
-    if (!db || !userId) {
-      console.error("Veritabanı veya kullanıcı ID'si hazır değil.");
+    if (!db || !userId || !isAdminLoggedIn) {
+      console.error("Veritabanı veya kullanıcı ID'si hazır değil veya yönetici değilsiniz.");
       return;
     }
     if (window.confirm("Bu talebi silmek istediğinizden emin misiniz?")) { // Basit onay
       try {
-        await deleteDoc(doc(db, `artifacts/${__app_id}/users/${userId}/requests`, requestId));
+        await deleteDoc(doc(db, `artifacts/${__app_id}/public/requests`, requestId));
         console.log("Talep başarıyla silindi.");
       } catch (error) {
         console.error("Talep silinirken hata oluştu:", error);
@@ -314,6 +340,51 @@ export default function Home() {
   // Detayları kapatma fonksiyonu
   const handleCloseDetails = () => {
     setSelectedRequestDetails(null);
+  };
+
+  // Admin giriş fonksiyonu
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setAdminLoginError(""); // Önceki hataları temizle
+    if (!auth) {
+      setAdminLoginError("Firebase kimlik doğrulama hazır değil.");
+      return;
+    }
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+      if (userCredential.user.uid === ADMIN_UID) {
+        setIsAdminLoggedIn(true);
+        setUserId(userCredential.user.uid); // userId'yi admin UID olarak güncelle
+        setAdminEmail("");
+        setAdminPassword("");
+        console.log("Admin olarak giriş yapıldı. UID:", userCredential.user.uid);
+      } else {
+        // Admin olmayan bir hesapla giriş yapıldıysa çıkış yap
+        await signOut(auth);
+        setAdminLoginError("Bu hesap yönetici yetkisine sahip değil.");
+      }
+    } catch (error) {
+      console.error("Admin girişi sırasında hata:", error);
+      setAdminLoginError("Giriş başarısız: " + error.message);
+    }
+  };
+
+  // Admin çıkış fonksiyonu
+  const handleAdminLogout = async () => {
+    if (auth) {
+      try {
+        await signOut(auth);
+        setIsAdminLoggedIn(false);
+        setUserId(null); // userId'yi sıfırla
+        setAdminEmail("");
+        setAdminPassword("");
+        setAdminLoginError("");
+        setRequests([]); // Talepleri temizle
+        console.log("Admin çıkış yapıldı.");
+      } catch (error) {
+        console.error("Çıkış yapılırken hata:", error);
+      }
+    }
   };
 
 
@@ -636,7 +707,7 @@ export default function Home() {
                         name={`question-${index}`}
                         value={answers[index] || ""}
                         onChange={(e) => handleAnswerChange(index, e.target.value)}
-                        className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg"
+                        className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
                         required
                       />
                       {formErrors[`question-${index}`] && (
@@ -679,7 +750,7 @@ export default function Home() {
                       name="name"
                       value={contactInfo.name}
                       onChange={handleContactInfoChange}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg"
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
                       required
                     />
                     {formErrors.name && (
@@ -696,7 +767,7 @@ export default function Home() {
                       name="email"
                       value={contactInfo.email}
                       onChange={handleContactInfoChange}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg"
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
                       required
                     />
                     {formErrors.email && (
@@ -713,7 +784,7 @@ export default function Home() {
                       name="phone"
                       value={contactInfo.phone}
                       onChange={handleContactInfoChange}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg"
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
                       required
                     />
                     {formErrors.phone && (
@@ -730,7 +801,7 @@ export default function Home() {
                       value={contactInfo.message}
                       onChange={handleContactInfoChange}
                       rows="6"
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg"
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
                       required
                     ></textarea>
                     {formErrors.message && (
@@ -816,52 +887,108 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Gönderilen Talepler Paneli (Admin Paneli) */}
-      <section className="py-20 px-8 bg-gray-100 w-full" id="admin-panel">
+      {/* Yönetici Giriş ve Panel Bölümü */}
+      <section className="py-20 px-8 bg-gray-100 w-full" id="admin-section">
         <div className="max-w-5xl mx-auto text-center">
           <h2 className="text-5xl font-extrabold mb-12 text-gray-900 relative pb-6">
-            Gönderilen Talepler Paneli
+            Yönetici Paneli
             <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-28 h-1.5 bg-blue-600 rounded-full"></span>
           </h2>
+
           {!isAuthReady ? (
-            <p className="text-gray-700 text-lg">Yükleniyor... (Kimlik doğrulama bekleniyor)</p>
+            <p className="text-gray-700 text-lg mb-8">Yükleniyor... (Kimlik doğrulama bekleniyor)</p>
           ) : (
-            userId ? (
-              requests.length === 0 ? (
-                <p className="text-gray-700 text-lg">Henüz gönderilmiş bir talep bulunmamaktadır.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {requests.map((request) => (
-                    <div key={request.id} className="bg-white p-6 rounded-lg shadow-md text-left border border-gray-200">
-                      <p className="text-lg font-semibold text-gray-800 mb-2">
-                        <span className="font-bold">Ana Hizmet:</span> {request.mainService}
-                      </p>
-                      <p className="text-md text-gray-700 mb-4">
-                        <span className="font-bold">Alt Hizmet:</span> {request.subService}
-                      </p>
-                      <p className="text-sm text-gray-500 mb-4">
-                        Gönderilme Tarihi: {request.timestamp ? format(new Date(request.timestamp), 'dd.MM.yyyy HH:mm') : 'N/A'}
-                      </p>
-                      <div className="flex justify-end space-x-3">
-                        <button
-                          onClick={() => handleViewDetails(request)}
-                          className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
-                        >
-                          <Eye size={18} className="mr-1" /> Detayları Gör
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRequest(request.id)}
-                          className="flex items-center px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm"
-                        >
-                          <Trash2 size={18} className="mr-1" /> Sil
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+            !isAdminLoggedIn ? (
+              <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-md mx-auto border border-gray-200">
+                <h3 className="text-3xl font-bold text-gray-800 mb-6">Yönetici Girişi</h3>
+                <form onSubmit={handleAdminLogin}>
+                  <div className="mb-6">
+                    <label htmlFor="adminEmail" className="block text-gray-700 text-xl font-medium mb-3 text-left">
+                      E-posta
+                    </label>
+                    <input
+                      type="email"
+                      id="adminEmail"
+                      name="adminEmail"
+                      value={adminEmail}
+                      onChange={(e) => setAdminEmail(e.target.value)}
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900"
+                      required
+                    />
+                  </div>
+                  <div className="mb-6">
+                    <label htmlFor="adminPassword" className="block text-gray-700 text-xl font-medium mb-3 text-left">
+                      Şifre
+                    </label>
+                    <input
+                      type="password"
+                      id="adminPassword"
+                      name="adminPassword"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900"
+                      required
+                    />
+                  </div>
+                  {adminLoginError && (
+                    <p className="text-red-500 text-sm mb-4">{adminLoginError}</p>
+                  )}
+                  <button
+                    type="submit"
+                    className="w-full px-8 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition duration-300 flex items-center justify-center text-lg shadow-md"
+                  >
+                    <LogIn size={22} className="mr-2" /> Giriş Yap
+                  </button>
+                </form>
+              </div>
+            ) : ( // Admin giriş yapmışsa paneli göster
+              <div>
+                <div className="flex justify-center mb-8">
+                  <button
+                    onClick={handleAdminLogout}
+                    className="px-8 py-4 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition duration-300 flex items-center justify-center text-lg shadow-md"
+                  >
+                    <LogOut size={22} className="mr-2" /> Çıkış Yap
+                  </button>
                 </div>
-              )
-            ) : (
-              <p className="text-red-500 text-lg">Kullanıcı kimliği alınamadı. Talepler görüntülenemiyor.</p>
+                <h3 className="text-3xl font-bold text-gray-800 mb-6">Gönderilen Talepler</h3>
+                {requests.length === 0 ? (
+                  <p className="text-gray-700 text-lg">Henüz gönderilmiş bir talep bulunmamaktadır.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {requests.map((request) => (
+                      <div key={request.id} className="bg-white p-6 rounded-lg shadow-md text-left border border-gray-200">
+                        <p className="text-lg font-semibold text-gray-800 mb-2">
+                          <span className="font-bold">Ana Hizmet:</span> {request.mainService}
+                        </p>
+                        <p className="text-md text-gray-700 mb-4">
+                          <span className="font-bold">Alt Hizmet:</span> {request.subService}
+                        </p>
+                        <p className="text-sm text-gray-500 mb-4">
+                          Gönderilme Tarihi: {request.timestamp ? format(new Date(request.timestamp), 'dd.MM.yyyy HH:mm') : 'N/A'}
+                        </p>
+                        <p className="text-sm text-gray-500 mb-4">
+                          Gönderen Kullanıcı ID: {request.submitterUserId}
+                        </p>
+                        <div className="flex justify-end space-x-3">
+                          <button
+                            onClick={() => handleViewDetails(request)}
+                            className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
+                          >
+                            <Eye size={18} className="mr-1" /> Detayları Gör
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRequest(request.id)}
+                            className="flex items-center px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm"
+                          >
+                            <Trash2 size={18} className="mr-1" /> Sil
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )
           )}
         </div>
@@ -872,7 +999,7 @@ export default function Home() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-8 rounded-lg shadow-xl max-w-lg w-full relative">
             <h3 className="text-2xl font-bold text-gray-800 mb-6">Talep Detayları</h3>
-            <div className="mb-4">
+            <div className="mb-4 text-gray-800"> {/* Metin rengi düzeltildi */}
               <p className="text-lg mb-2"><span className="font-semibold">Ana Hizmet:</span> {selectedRequestDetails.mainService}</p>
               <p className="text-lg mb-2"><span className="font-semibold">Alt Hizmet:</span> {selectedRequestDetails.subService}</p>
               <p className="text-lg mb-2"><span className="font-semibold">İsim Soyisim:</span> {selectedRequestDetails.contactInfo.name}</p>
@@ -880,6 +1007,7 @@ export default function Home() {
               <p className="text-lg mb-2"><span className="font-semibold">Telefon:</span> {selectedRequestDetails.contactInfo.phone}</p>
               <p className="text-lg mb-2"><span className="font-semibold">Mesaj:</span> {selectedRequestDetails.contactInfo.message}</p>
               <p className="text-lg mb-2"><span className="font-semibold">Gönderilme:</span> {selectedRequestDetails.timestamp ? format(new Date(selectedRequestDetails.timestamp), 'dd.MM.yyyy HH:mm') : 'N/A'}</p>
+              <p className="text-lg mb-2"><span className="font-semibold">Gönderen Kullanıcı ID:</span> {selectedRequestDetails.submitterUserId}</p>
 
               <h4 className="text-xl font-bold text-gray-700 mt-4 mb-2">Hizmete Özel Cevaplar:</h4>
               {Object.keys(selectedRequestDetails.answers).map((key, index) => (
