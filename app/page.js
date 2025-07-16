@@ -36,7 +36,8 @@ export default function Home() {
 
   // YÖNETİCİ UID'Sİ BURAYA GELECEK - KENDİ YÖNETİCİ HESABININ UID'Sİ İLE DEĞİŞTİR!
   // Firebase Authentication'da oluşturduğun yönetici kullanıcının UID'si olacak.
-  const ADMIN_UID = "SENİN_YÖNETİCİ_UID'Nİ_BURAYA_YAPIŞTIR"; // Örn: "abcdef1234567890abcdef1234567890"
+  const ADMIN_UID = "cMt4lFKo6JOOY2gM8Kx0gjlIDQh2"; // Furkan'ın sağladığı UID
+  // Lütfen bu satırı Firebase Authentication'da oluşturduğun yönetici hesabının gerçek UID'si ile değiştir.
 
   // Admin giriş formu state'leri
   const [adminEmail, setAdminEmail] = useState("");
@@ -117,7 +118,8 @@ export default function Home() {
       console.error("Firebase başlatılırken hata:", error);
       setIsAuthReady(true);
     }
-  }, []);
+  }, [ADMIN_UID]);
+
 
   // Firestore'dan talepleri çek (userId ve isAdminLoggedIn hazır olduğunda)
   useEffect(() => {
@@ -142,7 +144,7 @@ export default function Home() {
     });
 
     return () => unsubscribe(); // Cleanup
-  }, [db, userId, isAuthReady, isAdminLoggedIn, auth, ADMIN_UID]); // ADMIN_UID'yi bağımlılık olarak ekledik
+  }, [db, userId, isAuthReady, isAdminLoggedIn, auth, ADMIN_UID]);
 
 
   // Web sitesinde sunulan hizmetlerin verileri ve her bir alt hizmete özel sorular.
@@ -322,7 +324,8 @@ export default function Home() {
       console.error("Veritabanı veya kullanıcı ID'si hazır değil veya yönetici değilsiniz.");
       return;
     }
-    if (window.confirm("Bu talebi silmek istediğinizden emin misiniz?")) { // Basit onay
+    // alert yerine custom modal kullanılmalı
+    if (window.confirm("Bu talebi silmek istediğinizden emin misiniz?")) {
       try {
         await deleteDoc(doc(db, `artifacts/${__app_id}/public/requests`, requestId));
         console.log("Talep başarıyla silindi.");
