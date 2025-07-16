@@ -1,25 +1,33 @@
-"use client"; // Bu satır, React Hook'larını kullanmak için gerekli!
+"use client"; // Bu satır, React Hook'larını (useState gibi) kullanmak için gereklidir.
 
 // app/page.js
 import Link from "next/link"; // Next.js Link bileşenini içeri aktarıyoruz.
 import Image from "next/image"; // Görsel kullanacağımız için Image bileşenini içeri aktarıyoruz.
 import { useState } from "react"; // Form adımlarını yönetmek için useState hook'u
-import { Phone, Mail, ChevronRight } from "lucide-react"; // Telefon ve E-posta ikonları için
+
+// Lucide-react ikonlarını dinamik olarak içeri aktarıyoruz.
+// Bu, sunucu tarafı render (SSR) sırasında oluşabilecek hataları önler.
+import dynamic from "next/dynamic";
+
+const Phone = dynamic(() => import("lucide-react").then(mod => mod.Phone), { ssr: false });
+const Mail = dynamic(() => import("lucide-react").then(mod => mod.Mail), { ssr: false });
+const ChevronRight = dynamic(() => import("lucide-react").then(mod => mod.ChevronRight), { ssr: false });
+
 
 export default function Home() {
-  // Form durumu yönetimi
-  const [currentStep, setCurrentStep] = useState(1);
-  const [selectedMainService, setSelectedMainService] = useState(null);
-  const [selectedSubService, setSelectedSubService] = useState(null);
-  const [answers, setAnswers] = useState({});
-  const [contactInfo, setContactInfo] = useState({
+  // Form adımlarını, seçilen hizmetleri ve kullanıcı cevaplarını yönetmek için React state'leri tanımlıyoruz.
+  const [currentStep, setCurrentStep] = useState(1); // Mevcut form adımını tutar (1, 2, 3 veya 4).
+  const [selectedMainService, setSelectedMainService] = useState(null); // Seçilen ana hizmeti tutar (örn: "Çevre Düzenleme").
+  const [selectedSubService, setSelectedSubService] = useState(null); // Seçilen alt hizmeti tutar (örn: "Peyzaj").
+  const [answers, setAnswers] = useState({}); // Alt hizmete özel soruların cevaplarını tutar.
+  const [contactInfo, setContactInfo] = useState({ // Kullanıcının iletişim bilgilerini tutar.
     name: "",
     email: "",
     phone: "",
     message: "",
   });
 
-  // Hizmet verileri
+  // Web sitesinde sunulan hizmetlerin verileri ve her bir alt hizmete özel sorular.
   const servicesData = {
     "Çevre Düzenleme": {
       subCategories: [
@@ -56,39 +64,44 @@ export default function Home() {
     },
   };
 
+  // Ana hizmet seçildiğinde çalışan fonksiyon.
   const handleMainServiceSelect = (serviceName) => {
     setSelectedMainService(serviceName);
-    setSelectedSubService(null); // Alt hizmeti sıfırla
-    setAnswers({}); // Cevapları sıfırla
-    setCurrentStep(2);
+    setSelectedSubService(null); // Yeni ana hizmet seçildiğinde alt hizmeti sıfırla.
+    setAnswers({}); // Yeni ana hizmet seçildiğinde cevapları sıfırla.
+    setCurrentStep(2); // Bir sonraki adıma geç.
   };
 
+  // Alt hizmet seçildiğinde çalışan fonksiyon.
   const handleSubServiceSelect = (subService) => {
     setSelectedSubService(subService);
-    setAnswers({}); // Cevapları sıfırla
-    setCurrentStep(3);
+    setAnswers({}); // Yeni alt hizmet seçildiğinde cevapları sıfırla.
+    setCurrentStep(3); // Bir sonraki adıma geç.
   };
 
+  // Hizmete özel soruların cevapları değiştiğinde state'i güncelleyen fonksiyon.
   const handleAnswerChange = (questionIndex, value) => {
     setAnswers((prev) => ({ ...prev, [questionIndex]: value }));
   };
 
+  // İletişim bilgileri form alanları değiştiğinde state'i güncelleyen fonksiyon.
   const handleContactInfoChange = (e) => {
     setContactInfo((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  // Form gönderildiğinde çalışan fonksiyon.
   const handleSubmit = (e) => {
-    e.preventDefault();
-    // Burada form verilerini gönderme işlemi yapılabilir (örneğin bir API'ye)
+    e.preventDefault(); // Sayfanın yeniden yüklenmesini engelle.
+    // Form verilerini konsola yazdır (gerçek uygulamada bir API'ye gönderilebilir).
     console.log("Form Gönderildi:", {
       mainService: selectedMainService,
       subService: selectedSubService,
       answers: answers,
       contactInfo: contactInfo,
     });
-    // alert yerine daha profesyonel bir mesaj kutusu kullanılabilir (örneğin bir modal)
+    // Kullanıcıya bir bildirim göster (alert yerine daha modern bir modal kullanılabilir).
     alert("Talebiniz başarıyla alınmıştır. En kısa sürede sizinle iletişime geçeceğiz.");
-    // Formu sıfırla
+    // Formu başlangıç durumuna sıfırla.
     setCurrentStep(1);
     setSelectedMainService(null);
     setSelectedSubService(null);
@@ -96,12 +109,14 @@ export default function Home() {
     setContactInfo({ name: "", email: "", phone: "", message: "" });
   };
 
+  // Mevcut alt hizmete ait soruları dinamik olarak alır.
   const currentQuestions = selectedSubService
     ? servicesData[selectedMainService]?.subCategories.find(
         (sub) => sub.name === selectedSubService
       )?.questions || []
     : [];
 
+  // Form adımlarının tamamlanıp tamamlanmadığını kontrol eden yardımcı değişkenler.
   const isStep1Complete = selectedMainService !== null;
   const isStep2Complete = selectedSubService !== null;
   const isStep3Complete = currentQuestions.every(
@@ -114,39 +129,34 @@ export default function Home() {
     contactInfo.message.trim() !== "";
 
   return (
-    <main className="min-h-screen bg-white text-gray-900 flex flex-col items-center"> {/* Arkaplanı beyaz, varsayılan metni koyu gri yaptık, flex ile dikeyde ortalama */}
+    <main className="min-h-screen bg-white text-gray-900 flex flex-col items-center"> {/* Ana içerik alanı, Tailwind CSS ile stil verildi */}
 
-      {/* Hero Bölümü (En Üst Kısım) */}
+      {/* Hero Bölümü (En Üst Kısım) - Web sitesinin ana görsel ve başlık alanı */}
       <section className="relative h-screen w-full flex items-center justify-center bg-blue-600 text-white overflow-hidden p-8">
-        {/* Arka plan görseli - Placeholder, gerçek görsel yolu buraya gelecek */}
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-500 opacity-90"></div>
-
-        <div className="relative text-center z-10 p-4"> {/* İç boşluk ekledim */}
-          {/* Ana Başlık */}
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-500 opacity-90"></div> {/* Arka plan degrade efekti */}
+        <div className="relative text-center z-10 p-4">
           <h1 className="text-6xl md:text-7xl lg:text-8xl font-extrabold mb-4 leading-tight">
             Zemta İnşaat &amp; Hafriyat
           </h1>
-          {/* Slogan */}
-          <p className="text-xl md:text-2xl lg:text-3xl font-medium mt-4 max-w-3xl mx-auto"> {/* Max genişlik ve ortalama */}
+          <p className="text-xl md:text-2xl lg:text-3xl font-medium mt-4 max-w-3xl mx-auto">
             Toprağa değer, geleceğe yön verir.
           </p>
         </div>
       </section>
 
-      {/* HİZMETLER BÖLÜMÜ - İSTEDİĞİN GÖRSELLİ KUTUCUKLAR VE METİN HİZALAMALARI DÜZELTİLMİŞ HALİ */}
-      <section className="w-full max-w-6xl mx-auto py-16 px-8"> {/* mx-auto ile ortalama, py ve px ile boşluk */}
+      {/* Hizmetler Bölümü - Sunulan hizmetleri görsel kartlarla gösterir */}
+      <section className="w-full max-w-6xl mx-auto py-16 px-8">
         <h2 className="text-5xl font-extrabold text-center text-gray-900 mb-12 relative pb-4">
           Hizmetlerimiz
-          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-blue-600 rounded-full"></span> {/* Alt çizgi */}
+          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-blue-600 rounded-full"></span> {/* Başlık altındaki dekoratif çizgi */}
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-
-          {/* Hizmet Kartı 1: Çevre Düzenleme */}
+          {/* Her bir hizmet için kart yapısı */}
           <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-cevre.jpg')" }}></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
-            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center">
               <h3 className="text-3xl font-bold mb-2">Çevre Düzenleme</h3>
               <p className="text-lg mb-4 leading-tight">Doğal dokularla modern yaşam alanları tasarlıyoruz. Peyzajdan izolasyona kadar kapsamlı çevre çözümleri.</p>
               <Link href="/cevre-duzenleme" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
@@ -155,11 +165,10 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Hizmet Kartı 2: Elektrik Tesisatı */}
           <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-elektrik.jpg')" }}></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
-            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center">
               <h3 className="text-3xl font-bold mb-2">Elektrik Tesisatı</h3>
               <p className="text-lg mb-4 leading-tight">Bahçe aydınlatmadan mekanik tava pano sistemlerine kadar modern elektrik tesisat çözümleri.</p>
               <Link href="/elektrik-tesisati" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
@@ -168,11 +177,10 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Hizmet Kartı 3: Karakalem Sanatı */}
           <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
-            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-karakalem.jpg')" }}></div> {/* Görsel yolu düzeltildi */}
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-karakalem.jpg')" }}></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
-            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center">
               <h3 className="text-3xl font-bold mb-2">Karakalem Sanatı</h3>
               <p className="text-lg mb-4 leading-tight">Duvarlara değer katan özel portre çizimleri. Yaşlı, kadın, çocuk figürleriyle sanatı yaşam alanına taşı.</p>
               <Link href="/karakalem-sanati" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
@@ -181,11 +189,10 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Hizmet Kartı 4: Parke Döşeme */}
           <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-parke.jpg')" }}></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
-            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center">
               <h3 className="text-3xl font-bold mb-2">Parke Döşeme</h3>
               <p className="text-lg mb-4 leading-tight">Modern parke çözümleri, renk uyumu, teknik uygulama ve örnek çalışmalar.</p>
               <Link href="/parke-doseme" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
@@ -194,11 +201,10 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Hizmet Kartı 5: E-Ticaret */}
           <div className="group relative w-full h-80 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer">
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/images/hizmet-eticaret.jpg')" }}></div>
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-300"></div>
-            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center"> {/* text-center eklendi */}
+            <div className="absolute inset-0 flex flex-col justify-end p-6 text-white text-center">
               <h3 className="text-3xl font-bold mb-2">E-Ticaret</h3>
               <p className="text-lg mb-4 leading-tight">Dekoratif kare yastıklar ve erkek gömlek koleksiyonu.</p>
               <Link href="/e-ticaret" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
@@ -206,7 +212,6 @@ export default function Home() {
               </Link>
             </div>
           </div>
-
         </div>
       </section>
 
@@ -250,12 +255,12 @@ export default function Home() {
         </div>
       </section>
 
-      {/* BİZE ULAŞIN BÖLÜMÜ - YENİ İKONLAR VE ÇOK ADIMLI FORM */}
+      {/* Bize Ulaşın Bölümü - İletişim bilgileri ve çok adımlı hizmet talep formu */}
       <section className="py-16 px-8 bg-gray-100 w-full">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold mb-8 text-gray-800">Bize Ulaşın</h2>
 
-          {/* İletişim Bilgileri - İkonlarla */}
+          {/* İletişim Bilgileri (Telefon ve E-posta ikonlarla) */}
           <div className="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-8 text-lg text-gray-700 mb-12">
             <p className="flex items-center">
               <Phone className="mr-2 text-blue-600" size={24} /> Telefon:{" "}
@@ -267,7 +272,7 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Sosyal Medya Hesapları (Metin olarak, ikonlar için Font Awesome CDN eklenmeli) */}
+          {/* Sosyal Medya Hesapları */}
           <div className="mt-8 mb-12">
             <h3 className="text-2xl font-semibold mb-4 text-gray-800">Sosyal Medya Hesaplarımız</h3>
             <div className="flex justify-center space-x-6 text-blue-600">
