@@ -101,44 +101,50 @@ export default function Home() {
       </section>
 
       {/* Hakkımızda Bölümü */}
-      <section className="py-16 px-8 bg-blue-50 w-full"> {/* Açık mavi arka plan, w-full ekledim */}
+       <section className="py-16 px-8 bg-blue-50 w-full"> {/* Açık mavi arka plan, tam genişlik */}
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-8 text-gray-800">Hakkımızda</h2>
-          <p className="mb-4 text-lg text-gray-700 leading-relaxed">
+          {/* Başlık boyutunu artırdım */}
+          <h2 className="text-5xl font-extrabold mb-8 text-gray-800">Hakkımızda</h2>
+          {/* Paragraf boyutlarını ve satır aralığını ayarladım */}
+          <p className="mb-4 text-xl text-gray-700 leading-relaxed">
             Zemta İnşaat ve Hafriyat, köklü bir geçmişe ve yenilikçi bir vizyona sahip olan güçlü bir inşaat firmasıdır.
           </p>
-          <p className="mb-4 text-lg text-gray-700 leading-relaxed">
+          <p className="mb-4 text-xl text-gray-700 leading-relaxed">
             Temelleri 2000 yılında atılan Çınar İnşaat ve Hafriyat, 2019 yılında faaliyetlerine son vermiştir. Ancak, onun birikimi ve tecrübesi şimdi Zemta İnşaat ve Hafriyat çatısı altında çok daha büyük hedeflerle devam etmektedir.
           </p>
-          <p className="mb-4 text-lg text-gray-700 leading-relaxed">
+          <p className="mb-4 text-xl text-gray-700 leading-relaxed">
             20 yılı aşkın süredir Bursa ve çevresinde 1000&apos;in üzerinde başarılı çevre düzenleme projesine imza atan firmamız, kaliteyi ve güveni merkezine alarak her geçen gün daha da büyümektedir.
           </p>
-          <p className="mb-4 text-lg text-gray-700 leading-relaxed">
+          <p className="mb-4 text-xl text-gray-700 leading-relaxed">
             Özellikle Podyum Park, Misi Köyü ve birçok büyük ölçekli projede çevre düzenlemesi, altyapı ve kazı çalışmalarını başarıyla tamamlayan eski firmamız Çınar İnşaat&apos;ın mirası, bugün Zemta ile daha ileri taşınmaktadır.
           </p>
-          <p className="mb-4 text-lg text-gray-700 leading-relaxed">
+          <p className="mb-4 text-xl text-gray-700 leading-relaxed">
             Zemta, sadece geçmişin değil, geleceğin inşaat firmasıdır.
           </p>
-          <p className="mb-4 text-lg text-gray-700 leading-relaxed">
+          <p className="mb-4 text-xl text-gray-700 leading-relaxed">
             Kara kalem duvar sanatından e-ticaret çözümlerine, elektrik tesisatından modern parke döşemeye kadar geniş hizmet yelpazesiyle bireysel ve kurumsal müşterilere profesyonel çözümler sunmaktadır.
           </p>
-          <p className="mb-4 text-lg text-gray-700 font-semibold leading-relaxed">
+          {/* Slogan kısmını daha da vurgulu yaptım */}
+          <p className="mb-4 text-2xl text-gray-700 font-bold leading-relaxed">
             &quot;Toprağa değer, geleceğe yön verir.&quot; ilkesini benimseyerek;
           </p>
-          <ul className="list-disc list-inside text-lg text-gray-700 mb-4 leading-relaxed mx-auto max-w-md">
+          {/* Liste öğelerini de biraz büyüttüm */}
+          <ul className="list-disc list-inside text-xl text-gray-700 mb-4 leading-relaxed mx-auto max-w-md">
             <li>Güvenilir</li>
             <li>Disiplinli</li>
             <li>Şeffaf</li>
             <li>Estetik odaklı</li>
           </ul>
-          <p className="text-lg text-gray-700 font-bold mt-8">
+          <p className="text-xl text-gray-700 font-bold mt-8">
             bir hizmet anlayışı sunarız.
           </p>
-          <p className="text-xl text-gray-800 font-extrabold mt-8">
+          {/* Son sloganı daha da büyük ve kalın yaptım */}
+          <p className="text-3xl text-gray-800 font-extrabold mt-8">
             Zemta: Temelden geleceğe.
           </p>
         </div>
       </section>
+
 
       {/* İletişim Bölümü */}
       <section className="py-16 px-8 bg-gray-100 w-full"> {/* Gri arka plan, w-full ekledim */}
