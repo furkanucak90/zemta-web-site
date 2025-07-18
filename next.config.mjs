@@ -1,10 +1,28 @@
+// next.config.mjs
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Resim optimizasyonu için etki alanlarını buraya ekleyebilirsiniz
+  // Bu satır, Image bileşeninin harici domainlerden görsel yüklemesine izin verir.
+  // Kendi domainlerinizi buraya eklemelisiniz.
   images: {
-    domains: [], // Eğer harici bir kaynaktan resim çekiyorsanız buraya ekleyin.
-                 // Şu an için yerel resimler kullanıldığı için boş kalabilir.
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'placehold.co', // placeholder resimler için
+        port: '',
+        pathname: '/**',
+      },
+      // Eğer başka harici resim kaynakları kullanıyorsanız buraya ekleyin
+      // {
+      //   protocol: 'https',
+      //   hostname: 'example.com',
+      // },
+    ],
+  },
+  // Bu ayar, Next.js'in dosya uzantılarını nasıl işleyeceğini belirtir.
+  // Eğer .mjs kullanıyorsanız, bu ayar önemlidir.
+  experimental: {
+    esmExternals: true,
   },
 };
 
-export default nextConfig; // Burası düzeltildi!
+export default nextConfig;

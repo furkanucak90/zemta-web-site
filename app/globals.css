@@ -1,3 +1,13 @@
+/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Genel stiller */
+body {
+  font-family: 'Inter', sans-serif; /* Inter fontunu kullan */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Diğer özel stilleriniz buraya gelebilir */
