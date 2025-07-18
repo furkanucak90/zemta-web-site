@@ -1,153 +1,99 @@
-"use client"; // Bu satır, React Hook'larını (useState gibi) kullanmak için gereklidir.
+'use client'; // Bu satır ÇOK ÖNEMLİ! Bu dosyayı istemci tarafı bileşeni yapar.
 
-// app/page.js
-import Link from "next/link"; // Next.js Link bileşenini içeri aktarıyoruz.
-import Image from "next/image"; // Görsel kullanacağımız için Image bileşenini içeri aktarıyoruz.
-import { useState, useEffect } from "react"; // Form adımlarını yönetmek için useState hook'u, useEffect Firebase için
-import { format } from 'date-fns'; // Tarih formatlamak için (npm install date-fns)
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 
-// Firebase importları
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, deleteDoc, doc } from 'firebase/firestore';
+// Firebase importları utils/firebase.js dosyasından geliyor
+import { auth, db } from '../utils/firebase'; // Düzeltilmiş yol: app klasöründen root'a (..), sonra utils'a
 
-// Lucide-react ikonlarını dinamik olarak içeri aktarıyoruz.
-// Bu, sunucu tarafı render (SSR) sırasında oluşabilecek hataları önler.
-import dynamic from "next/dynamic";
+// Firebase fonksiyonlarını içe aktar
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 
+// Lucide-react ikonları dinamik olarak içeri aktarılıyor
 const Phone = dynamic(() => import("lucide-react").then(mod => mod.Phone), { ssr: false });
 const Mail = dynamic(() => import("lucide-react").then(mod => mod.Mail), { ssr: false });
 const ChevronRight = dynamic(() => import("lucide-react").then(mod => mod.ChevronRight), { ssr: false });
-const CheckCircle = dynamic(() => import("lucide-react").then(mod => mod.CheckCircle), { ssr: false }); // Başarı mesajı için ikon
-const XCircle = dynamic(() => import("lucide-react").then(mod => mod.XCircle), { ssr: false }); // Hata mesajı için ikon
-const Trash2 = dynamic(() => import("lucide-react").then(mod => mod.Trash2), { ssr: false }); // Silme ikon
-const Eye = dynamic(() => import("lucide-react").then(mod => mod.Eye), { ssr: false }); // Detay gör ikon
-const LogIn = dynamic(() => import("lucide-react").then(mod => mod.LogIn), { ssr: false }); // Giriş ikon
-const LogOut = dynamic(() => import("lucide-react").then(mod => mod.LogOut), { ssr: false }); // Çıkış ikon
+const CheckCircle = dynamic(() => import("lucide-react").then(mod => mod.CheckCircle), { ssr: false });
+const XCircle = dynamic(() => import("lucide-react").then(mod => mod.XCircle), { ssr: false });
+const Loader = dynamic(() => import("lucide-react").then(mod => mod.Loader), { ssr: false });
+const AlertCircle = dynamic(() => import("lucide-react").then(mod => mod.AlertCircle), { ssr: false });
+const Trash2 = dynamic(() => import("lucide-react").then(mod => mod.Trash2), { ssr: false });
+const Eye = dynamic(() => import("lucide-react").then(mod => mod.Eye), { ssr: false });
+const LogOut = dynamic(() => import("lucide-react").then(mod => mod.LogOut), { ssr: false });
 
 
-export default function Home() {
-  // Firebase ve Auth state'leri
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
-  const [userId, setUserId] = useState(null); // Mevcut kullanıcının UID'si
-  const [isAuthReady, setIsAuthReady] = useState(false); // Auth durumunun yüklenip yüklenmediğini kontrol eder
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false); // Yöneticinin giriş yapıp yapmadığını kontrol eder
+// Ana Uygulama Bileşeni (Routing'i yönetir)
+export default function App() {
+  const router = useRouter();
+  const [currentPath, setCurrentPath] = useState('');
 
-  // YÖNETİCİ UID'Sİ BURAYA GELECEK - KENDİ YÖNETİCİ HESABININ UID'Sİ İLE DEĞİŞTİR!
-  // Firebase Authentication'da oluşturduğun yönetici kullanıcının UID'si olacak.
-  const ADMIN_UID = "cMt4lFKo6JOOY2gM8Kx0gjlIDQh2"; // Furkan'ın sağladığı UID
-  // Lütfen bu satırı Firebase Authentication'da oluşturduğun yönetici hesabının gerçek UID'si ile değiştir.
+  useEffect(() => {
+    // Client tarafında path'i al
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname);
+    }
+  }, [router]);
 
-  // Admin giriş formu state'leri
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminLoginError, setAdminLoginError] = useState("");
+  // Firebase global değişkenlerini tanımla (Canvas ortamı için)
+  // Eğer Canvas ortamında çalışmıyorsa 'default-app-id' kullanır
+  const __app_id = typeof window !== 'undefined' && window.__app_id ? window.__app_id : 'default-app-id';
+
+  // Basit yönlendirme mantığı
+  if (currentPath === '/admin/login') {
+    return <AdminLoginPage auth={auth} router={router} />;
+  }
+  if (currentPath === '/admin') {
+    return <AdminPage auth={auth} db={db} router={router} __app_id={__app_id} />;
+  }
+
+  // Varsayılan olarak ana sayfayı render et
+  return <HomePage auth={auth} db={db} __app_id={__app_id} />;
+}
 
 
-  // Form adımlarını, seçilen hizmetleri ve kullanıcı cevaplarını yönetmek için React state'leri tanımlıyoruz.
-  const [currentStep, setCurrentStep] = useState(1); // Mevcut form adımını tutar (1, 2, 3, 4 veya 5).
-  const [selectedMainService, setSelectedMainService] = useState(null); // Seçilen ana hizmeti tutar (örn: "Çevre Düzenleme").
-  const [selectedSubService, setSelectedSubService] = useState(null); // Seçilen alt hizmeti tutar (örn: "Peyzaj").
-  const [answers, setAnswers] = useState({}); // Alt hizmete özel soruların cevaplarını tutar.
-  const [contactInfo, setContactInfo] = useState({ // Kullanıcının iletişim bilgilerini tutar.
+// --- HomePage Bileşeni ---
+function HomePage({ auth, db, __app_id }) {
+  const [userId, setUserId] = useState(null);
+  const [isFirebaseReady, setIsFirebaseReady] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [currentStep, setCurrentStep] = useState(1);
+  const [selectedMainService, setSelectedMainService] = useState(null);
+  const [selectedSubService, setSelectedSubService] = useState(null); // Hata burada düzeltildi!
+  const [answers, setAnswers] = useState({});
+  const [contactInfo, setContactInfo] = useState({
     name: "",
     email: "",
     phone: "",
     message: "",
   });
-  const [formErrors, setFormErrors] = useState({}); // Form doğrulama hatalarını tutar.
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false); // Başarı mesajını göstermek için state.
-  const [showErrorMessage, setShowErrorMessage] = useState(false); // Hata mesajını göstermek için state.
-  const [requests, setRequests] = useState([]); // Gönderilen talepleri tutar (Admin Paneli için)
-  const [selectedRequestDetails, setSelectedRequestDetails] = useState(null); // Detayları gösterilecek talep
+  const [formErrors, setFormErrors] = useState({});
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [showErrorMessage, setShowErrorMessage] = useState(false);
 
-
-  // Firebase'i başlat ve kimlik doğrulamayı yönet
   useEffect(() => {
-    try {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-
-      if (Object.keys(firebaseConfig).length === 0) {
-        console.error("Firebase config not found. Cannot initialize Firebase.");
-        setIsAuthReady(true);
-        return;
-      }
-
-      const app = initializeApp(firebaseConfig, appId);
-      const firestore = getFirestore(app);
-      const authInstance = getAuth(app);
-
-      setDb(firestore);
-      setAuth(authInstance);
-
-      // Kimlik doğrulama durumunu dinle
-      const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
+    if (db && auth) {
+      setIsFirebaseReady(true);
+      console.log("[HomePage Firebase Init] Firebase (db ve auth) hazır.");
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
         if (user) {
           setUserId(user.uid);
-          // Eğer giriş yapan kullanıcı admin UID'sine eşitse yönetici olarak işaretle
-          if (user.uid === ADMIN_UID) {
-            setIsAdminLoggedIn(true);
-            console.log("Admin olarak giriş yapıldı. UID:", user.uid); // Admin UID'yi konsolda görmek için
-          } else {
-            setIsAdminLoggedIn(false);
-          }
+          console.log("[HomePage Auth State] Kullanıcı oturum açtı:", user.uid);
         } else {
-          // Eğer token yoksa veya geçersizse anonim olarak oturum aç (normal kullanıcılar için)
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            try {
-              await signInWithCustomToken(authInstance, __initial_auth_token);
-              setUserId(authInstance.currentUser.uid);
-            } catch (error) {
-              console.error("Custom token ile oturum açılırken hata:", error);
-              await signInAnonymously(authInstance);
-              setUserId(authInstance.currentUser.uid);
-            }
-          } else {
-            await signInAnonymously(authInstance);
-            setUserId(authInstance.currentUser.uid);
-          }
-          setIsAdminLoggedIn(false);
+          setUserId(null);
+          console.log("[HomePage Auth State] Kullanıcı oturum açmadı (anonim veya çıkış yapıldı).");
         }
-        setIsAuthReady(true); // Kimlik doğrulama hazır
       });
-
-      return () => unsubscribe(); // Cleanup
-    } catch (error) {
-      console.error("Firebase başlatılırken hata:", error);
-      setIsAuthReady(true);
+      return () => unsubscribe();
+    } else {
+      console.warn("[HomePage Firebase Init] Firebase (db veya auth) henüz başlatılmadı. Bekleniyor...");
     }
-  }, [ADMIN_UID]);
+  }, [db, auth]);
 
-
-  // Firestore'dan talepleri çek (userId ve isAdminLoggedIn hazır olduğunda)
-  useEffect(() => {
-    if (!db || !userId || !isAuthReady || !isAdminLoggedIn) return; // Sadece admin girişliyse çek
-
-    // Tüm talepleri çeker (Firestore güvenlik kuralları ile sadece adminin okumasına izin vermelisin)
-    const q = query(collection(db, `artifacts/${__app_id}/public/requests`), orderBy("timestamp", "desc"));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedRequests = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setRequests(fetchedRequests);
-    }, (error) => {
-      console.error("Talepler çekilirken hata oluştu:", error);
-      // Hata oluşursa (örn: yetkilendirme hatası), adminin çıkış yapmasını sağlayabiliriz
-      if (error.code === 'permission-denied') {
-        setAdminLoginError("Talepleri görüntüleme yetkiniz yok. Lütfen yönetici hesabıyla giriş yapın.");
-        signOut(auth); // Yetki hatasında çıkış yap
-      }
-    });
-
-    return () => unsubscribe(); // Cleanup
-  }, [db, userId, isAuthReady, isAdminLoggedIn, auth, ADMIN_UID]);
-
-
-  // Web sitesinde sunulan hizmetlerin verileri ve her bir alt hizmete özel sorular.
   const servicesData = {
     "Çevre Düzenleme": {
       subCategories: [
@@ -184,45 +130,47 @@ export default function Home() {
     },
   };
 
-  // Ana hizmet seçildiğinde çalışan fonksiyon.
   const handleMainServiceSelect = (serviceName) => {
     setSelectedMainService(serviceName);
-    setSelectedSubService(null); // Yeni ana hizmet seçildiğinde alt hizmeti sıfırla.
-    setAnswers({}); // Yeni ana hizmet seçildiğinde cevapları sıfırla.
-    setCurrentStep(2); // Bir sonraki adıma geç.
-    setFormErrors({}); // Hataları temizle
-    setShowErrorMessage(false); // Hata mesajını gizle
+    setSelectedSubService(null);
+    setAnswers({});
+    setCurrentStep(2);
+    setFormErrors({});
+    setShowErrorMessage(false);
   };
 
-  // Alt hizmet seçildiğinde çalışan fonksiyon.
   const handleSubServiceSelect = (subService) => {
     setSelectedSubService(subService);
-    setAnswers({}); // Yeni alt hizmet seçildiğinde cevapları sıfırla.
-    setCurrentStep(3); // Bir sonraki adıma geç.
-    setFormErrors({}); // Hataları temizle
-    setShowErrorMessage(false); // Hata mesajını gizle
+    setAnswers({});
+    setCurrentStep(3);
+    setFormErrors({});
+    setShowErrorMessage(false);
   };
 
-  // Hizmete özel soruların cevapları değiştiğinde state'i güncelleyen fonksiyon.
   const handleAnswerChange = (questionIndex, value) => {
     setAnswers((prev) => ({ ...prev, [questionIndex]: value }));
-    setFormErrors((prev) => ({ ...prev, [`question-${questionIndex}`]: undefined })); // Hata mesajını temizle
-    setShowErrorMessage(false); // Hata mesajını gizle
+    setFormErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[`question-${questionIndex}`];
+      return newErrors;
+    });
+    setShowErrorMessage(false);
   };
 
-  // İletişim bilgileri form alanları değiştiğinde state'i güncelleyen fonksiyon.
   const handleContactInfoChange = (e) => {
     setContactInfo((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    setFormErrors((prev) => ({ ...prev, [e.target.name]: undefined })); // Hata mesajını temizle
-    setShowErrorMessage(false); // Hata mesajını gizle
+    setFormErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[e.target.name];
+      return newErrors;
+    });
+    setShowErrorMessage(false);
   };
 
-  // Form doğrulama fonksiyonu
   const validateForm = () => {
     let errors = {};
     let isValid = true;
 
-    // Adım 3 doğrulaması (Hizmete Özel Sorular)
     if (currentStep === 3) {
       currentQuestions.forEach((_, index) => {
         if (!answers[index] || answers[index].trim() === "") {
@@ -232,7 +180,6 @@ export default function Home() {
       });
     }
 
-    // Adım 4 doğrulaması (İletişim Bilgileri)
     if (currentStep === 4) {
       if (!contactInfo.name.trim()) {
         errors.name = "İsim soyisim zorunludur.";
@@ -248,7 +195,7 @@ export default function Home() {
       if (!contactInfo.phone.trim()) {
         errors.phone = "Telefon numarası zorunludur.";
         isValid = false;
-      } else if (!/^\d{10,}$/.test(contactInfo.phone.replace(/\D/g, ''))) { // Sadece rakamları kontrol et, min 10 hane
+      } else if (!/^\d{10,}$/.test(contactInfo.phone.replace(/\D/g, ''))) {
         errors.phone = "Geçerli bir telefon numarası giriniz (min 10 hane).";
         isValid = false;
       }
@@ -259,172 +206,147 @@ export default function Home() {
     }
 
     setFormErrors(errors);
+    console.log(`[Validation] validateForm çağrıldı. currentStep: ${currentStep}, isValid: ${isValid}, errors:`, errors);
     return isValid;
   };
 
-  // Form gönderildiğinde çalışan fonksiyon.
   const handleSubmit = async (e) => {
-    e.preventDefault(); // Sayfanın yeniden yüklenmesini engelle.
+    e.preventDefault();
+    console.log("[Submit Flow] handleSubmit çağrıldı. currentStep:", currentStep);
 
-    // Son adımda (onay) submit edildiğinde
     if (currentStep === 5) {
-      if (!db || !userId) {
+      console.log("[Submit Flow] Adım 5: Onay ve Gönderim aşaması.");
+
+      const formIsValid = validateForm();
+      console.log("[Submit Flow] Form gönderimi öncesi doğrulama sonucu (formIsValid):", formIsValid);
+      if (!formIsValid) {
         setShowErrorMessage(true);
-        console.error("Veritabanı veya kullanıcı ID'si hazır değil.");
+        console.error("[Submit Flow] HATA: Form gönderimi öncesi doğrulama başarısız. Hatalar:", formErrors);
+        setIsSubmitting(false);
         return;
       }
+      console.log("[Submit Flow] Form doğrulaması başarılı.");
+
+      if (!isFirebaseReady || !db) {
+        setShowErrorMessage(true);
+        console.error("[Submit Flow] KRİTİK HATA: Firebase veritabanı (db) henüz başlatılmadı veya hazır değil. Lütfen bekleyin ve tekrar deneyin.");
+        console.log("[Submit Flow] db nesnesi:", db);
+        setIsSubmitting(false);
+        return;
+      }
+      console.log("[Submit Flow] Firebase veritabanı (db) hazır ve kullanıma uygun.");
+
+      setIsSubmitting(true);
+      setShowErrorMessage(false);
+      setShowSuccessMessage(false);
+      console.log("[Submit State] isSubmitting true olarak ayarlandı.");
+
+      const currentSubmitterId = userId || 'anonymous';
+      console.log("[Submit Data] Form gönderiliyor. Gönderen ID:", currentSubmitterId);
+
+      const currentAppId = typeof __app_id !== 'undefined' ? String(__app_id) : 'default-app-id';
+      console.log("[Submit Data] Uygulama ID (currentAppId):", currentAppId);
+
+      const formData = {
+        mainService: selectedMainService,
+        subService: selectedSubService,
+        answers: answers,
+        contactInfo: contactInfo,
+        timestamp: new Date().toISOString(),
+        submitterUserId: currentSubmitterId
+      };
+
+      console.log("[Submit Data] Firestore'a gönderilecek veri (formData):", formData);
+      const targetCollectionPath = `artifacts/${currentAppId}/requests`;
+      console.log("[Submit Data] Hedef koleksiyon yolu (targetCollectionPath):", targetCollectionPath);
 
       try {
-        // Talebi public/requests koleksiyonuna kaydet
-        await addDoc(collection(db, `artifacts/${__app_id}/public/requests`), {
-          mainService: selectedMainService,
-          subService: selectedSubService,
-          answers: answers,
-          contactInfo: contactInfo,
-          timestamp: new Date().toISOString(), // ISO formatında zaman damgası
-          submitterUserId: userId // Talebi gönderen kullanıcının UID'si (anonim veya admin)
-        });
+        console.log("[Firestore Call] addDoc çağrılıyor...");
+        const docRef = await addDoc(collection(db, targetCollectionPath), formData);
+        console.log("[Firestore Call] addDoc başarıyla tamamlandı. Belge ID:", docRef.id);
 
-        // Başarı mesajını göster
         setShowSuccessMessage(true);
-        setShowErrorMessage(false); // Hata mesajını gizle
+        console.log("[Success] Talep başarıyla Firestore'a gönderildi. Başarı mesajı gösteriliyor.");
 
-        // Formu 3 saniye sonra sıfırla
         setTimeout(() => {
           setCurrentStep(1);
           setSelectedMainService(null);
           setSelectedSubService(null);
           setAnswers({});
           setContactInfo({ name: "", email: "", phone: "", message: "" });
+          setFormErrors({});
           setShowSuccessMessage(false);
-          setFormErrors({}); // Hataları temizle
-        }, 3000);
+          console.log("[Reset] Form sıfırlandı ve başlangıç adımına döndü.");
+        }, 10000);
 
       } catch (error) {
-        console.error("Talep gönderilirken hata oluştu:", error);
-        setShowErrorMessage(true); // Hata mesajını göster
-        setShowSuccessMessage(false); // Başarı mesajını gizle
+        console.error("[Firestore Error] Talep gönderilirken HATA oluştu:", error);
+        console.error("[Firestore Error] Hata kodu (error.code):", error.code);
+        console.error("[Firestore Error] Hata mesajı (error.message):", error.message);
+        setShowErrorMessage(true);
+      } finally {
+        setIsSubmitting(false);
+        console.log("[Submit State] isSubmitting durumu sıfırlandı (finally bloğu).");
       }
 
     } else {
-      // Diğer adımlarda "Devam" butonuna basıldığında
-      if (validateForm()) {
+      console.log(`[Navigation] Geçerli adım: ${currentStep}. Doğrulama yapılıyor...`);
+      const formIsValid = validateForm();
+      console.log(`[Navigation] Adım ${currentStep} doğrulama sonucu:`, formIsValid);
+
+      if (formIsValid) {
+        console.log("[Navigation] Doğrulama başarılı. Sonraki adıma geçiliyor.");
         setCurrentStep(currentStep + 1);
-        setShowErrorMessage(false); // Hata mesajını gizle
+        setShowErrorMessage(false);
       } else {
-        setShowErrorMessage(true); // Doğrulama hatası varsa hata mesajını göster
-        setShowSuccessMessage(false); // Başarı mesajını gizle
+        console.log("[Navigation] Doğrulama başarısız. Hatalar:", formErrors);
+        setShowErrorMessage(true);
+        setShowSuccessMessage(false);
       }
     }
   };
 
-  // Talebi silme fonksiyonu
-  const handleDeleteRequest = async (requestId) => {
-    if (!db || !userId || !isAdminLoggedIn) {
-      console.error("Veritabanı veya kullanıcı ID'si hazır değil veya yönetici değilsiniz.");
-      return;
-    }
-    // alert yerine custom modal kullanılmalı
-    if (window.confirm("Bu talebi silmek istediğinizden emin misiniz?")) {
-      try {
-        await deleteDoc(doc(db, `artifacts/${__app_id}/public/requests`, requestId));
-        console.log("Talep başarıyla silindi.");
-      } catch (error) {
-        console.error("Talep silinirken hata oluştu:", error);
-      }
-    }
-  };
-
-  // Talebin detaylarını gösterme fonksiyonu
-  const handleViewDetails = (request) => {
-    setSelectedRequestDetails(request);
-  };
-
-  // Detayları kapatma fonksiyonu
-  const handleCloseDetails = () => {
-    setSelectedRequestDetails(null);
-  };
-
-  // Admin giriş fonksiyonu
-  const handleAdminLogin = async (e) => {
-    e.preventDefault();
-    setAdminLoginError(""); // Önceki hataları temizle
-    if (!auth) {
-      setAdminLoginError("Firebase kimlik doğrulama hazır değil.");
-      return;
-    }
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
-      if (userCredential.user.uid === ADMIN_UID) {
-        setIsAdminLoggedIn(true);
-        setUserId(userCredential.user.uid); // userId'yi admin UID olarak güncelle
-        setAdminEmail("");
-        setAdminPassword("");
-        console.log("Admin olarak giriş yapıldı. UID:", userCredential.user.uid);
-      } else {
-        // Admin olmayan bir hesapla giriş yapıldıysa çıkış yap
-        await signOut(auth);
-        setAdminLoginError("Bu hesap yönetici yetkisine sahip değil.");
-      }
-    } catch (error) {
-      console.error("Admin girişi sırasında hata:", error);
-      setAdminLoginError("Giriş başarısız: " + error.message);
-    }
-  };
-
-  // Admin çıkış fonksiyonu
-  const handleAdminLogout = async () => {
-    if (auth) {
-      try {
-        await signOut(auth);
-        setIsAdminLoggedIn(false);
-        setUserId(null); // userId'yi sıfırla
-        setAdminEmail("");
-        setAdminPassword("");
-        setAdminLoginError("");
-        setRequests([]); // Talepleri temizle
-        console.log("Admin çıkış yapıldı.");
-      } catch (error) {
-        console.error("Çıkış yapılırken hata:", error);
-      }
-    }
-  };
-
-
-  // Mevcut alt hizmete ait soruları dinamik olarak alır.
   const currentQuestions = selectedSubService
     ? servicesData[selectedMainService]?.subCategories.find(
         (sub) => sub.name === selectedSubService
       )?.questions || []
     : [];
 
-  // Form adımlarının tamamlanıp tamamlanmadığını kontrol eden yardımcı değişkenler.
   const isStep1Complete = selectedMainService !== null;
   const isStep2Complete = selectedSubService !== null;
+
   const isStep3Complete = currentQuestions.every(
     (_, index) => answers[index] && answers[index].trim() !== ""
-  ) && Object.keys(formErrors).length === 0; // Hata yoksa tamamlanmış say
+  ) && Object.keys(formErrors).filter(key => key.startsWith('question-')).length === 0;
 
   const isStep4Complete =
     contactInfo.name.trim() !== "" &&
     contactInfo.email.trim() !== "" &&
     contactInfo.phone.trim() !== "" &&
     contactInfo.message.trim() !== "" &&
-    Object.keys(formErrors).length === 0; // Hata yoksa tamamlanmış say
+    Object.keys(formErrors).filter(key => ['name', 'email', 'phone', 'message'].includes(key)).length === 0;
 
-  const totalSteps = 5; // Toplam adım sayısı (1, 2, 3, 4, 5)
+  const totalSteps = 5;
+
+  useEffect(() => {
+    if (currentStep === 3) {
+      console.log("[UI State] Adım 3 için isStep3Complete:", isStep3Complete, "Form Hataları:", formErrors);
+    }
+    if (currentStep === 4) {
+      console.log("[UI State] Adım 4 için isStep4Complete:", isStep4Complete, "Form Hataları:", formErrors);
+    }
+  }, [currentStep, isStep3Complete, isStep4Complete, formErrors]);
+
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center"> {/* Ana içerik alanı, Tailwind CSS ile stil verildi */}
+    <main className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center">
 
-      {/* Hero Bölümü (En Üst Kısım) - Web sitesinin ana görsel ve başlık alanı */}
+      {/* Hero Bölümü */}
       <section className="relative h-screen w-full flex items-center justify-center bg-gradient-to-br from-blue-700 to-blue-500 text-white overflow-hidden p-8 shadow-xl">
-        {/* Arka plan görseli - Placeholder, gerçek görsel yolu buraya gelecek */}
-        <div className="absolute inset-0 opacity-80 bg-cover bg-center" style={{ backgroundImage: "url('/images/hero-bg.jpg')" }}></div>
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-800 to-blue-600 opacity-80"></div> {/* Arka plan degrade efekti */}
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-800 to-blue-600 opacity-80"></div>
 
         <div className="relative text-center z-10 p-6 max-w-4xl mx-auto animate-fadeInUp">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-4 leading-tight"> {/* Font boyutları küçültüldü */}
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-4 leading-tight">
             Zemta İnşaat &amp; Hafriyat
           </h1>
           <p className="text-xl md:text-2xl lg:text-3xl font-light mt-4 max-w-3xl mx-auto opacity-90">
@@ -436,21 +358,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Hizmetler Bölümü - Sunulan hizmetleri görsel kartlarla gösterir */}
+      {/* Hizmetler Bölümü */}
       <section id="hizmetlerimiz" className="w-full max-w-7xl mx-auto py-20 px-8 bg-white shadow-lg rounded-xl -mt-16 z-20 relative">
-        <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-10 relative pb-3"> {/* text-4xl -> text-3xl, mb-12 -> mb-10, pb-4 -> pb-3 */}
+        <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-10 relative pb-3">
           Hizmetlerimiz
-          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-1.5 bg-blue-600 rounded-full"></span> {/* w-24 -> w-20 */}
+          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-1.5 bg-blue-600 rounded-full"></span>
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-          {/* Her bir hizmet için kart yapısı */}
           <div className="group relative w-full h-96 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer border border-gray-200">
             <Image
               src="/images/hizmet-cevre.jpg"
               alt="Çevre Düzenleme"
-              layout="fill"
-              objectFit="cover"
+              fill={true}
+              style={{ objectFit: 'cover' }}
               className="transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-90 group-hover:opacity-95 transition-opacity duration-300 flex flex-col justify-end p-8 text-white">
@@ -466,8 +387,8 @@ export default function Home() {
             <Image
               src="/images/hizmet-elektrik.jpg"
               alt="Elektrik Tesisatı"
-              layout="fill"
-              objectFit="cover"
+              fill={true}
+              style={{ objectFit: 'cover' }}
               className="transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-90 group-hover:opacity-95 transition-opacity duration-300 flex flex-col justify-end p-8 text-white">
@@ -481,10 +402,10 @@ export default function Home() {
 
           <div className="group relative w-full h-96 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer border border-gray-200">
             <Image
-              src="/images/hizmet-karakale.jpg" // Karakalem görsel yolu hizmet-karakale.jpg olarak değiştirildi
+              src="/images/hizmet-karakale.jpg"
               alt="Karakalem Sanatı"
-              layout="fill"
-              objectFit="cover"
+              fill={true}
+              style={{ objectFit: 'cover' }}
               className="transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-90 group-hover:opacity-95 transition-opacity duration-300 flex flex-col justify-end p-8 text-white">
@@ -496,12 +417,12 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="group relative w-full h-96 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer border border-gray-200">
+          <div className="group relative w-full h-96 rounded-2xl overflow-hidden shadow-xl hover:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer border border-gray-200">
             <Image
               src="/images/hizmet-parke.jpg"
               alt="Parke Döşeme"
-              layout="fill"
-              objectFit="cover"
+              fill={true}
+              style={{ objectFit: 'cover' }}
               className="transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-90 group-hover:opacity-95 transition-opacity duration-300 flex flex-col justify-end p-8 text-white">
@@ -513,20 +434,20 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="group relative w-full h-96 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer border border-gray-200">
+          <div className="group relative w-full h-96 rounded-2xl overflow-hidden shadow-xl hover:hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer border border-gray-200">
             <Image
               src="/images/hizmet-eticaret.jpg"
               alt="E-Ticaret"
-              layout="fill"
-              objectFit="cover"
+              fill={true}
+              style={{ objectFit: 'cover' }}
               className="transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-90 group-hover:opacity-95 transition-opacity duration-300 flex flex-col justify-end p-8 text-white">
               <h3 className="text-3xl font-bold mb-3">E-Ticaret</h3>
               <p className="text-lg mb-6 leading-relaxed opacity-90">Dekoratif kare yastıklar ve erkek gömlek koleksiyonu.</p>
-              <Link href="/e-ticaret" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-7 rounded-full shadow-md transition-colors duration-300">
+              <a href="https://vsco.co/zamtainsaat" target="_blank" rel="noopener noreferrer" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-7 rounded-full shadow-md transition-colors duration-300">
                 Detaylı Bilgi
-              </Link>
+              </a>
             </div>
           </div>
         </div>
@@ -535,7 +456,7 @@ export default function Home() {
       {/* Hakkımızda Bölümü */}
       <section className="py-20 px-8 bg-blue-50 w-full">
         <div className="max-w-5xl mx-auto text-center">
-          <h2 className="text-5xl font-extrabold mb-12 text-gray-900 relative pb-6">
+          <h2 className="text-3xl font-extrabold mb-12 text-gray-900 relative pb-6">
             Hakkımızda
             <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-28 h-1.5 bg-blue-600 rounded-full"></span>
           </h2>
@@ -572,30 +493,30 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Bize Ulaşın Bölümü - İletişim bilgileri ve çok adımlı hizmet talep formu */}
-      <section className="py-20 px-8 bg-blue-700 w-full text-white"> {/* bg-gray-100 -> bg-blue-700, text-gray-900 -> text-white */}
+      {/* Bize Ulaşın Bölümü */}
+      <section className="py-20 px-8 bg-blue-700 w-full text-white">
         <div className="max-w-5xl mx-auto text-center">
-          <h2 className="text-5xl font-extrabold mb-12 relative pb-6"> {/* text-gray-900 kaldırıldı, zaten üstten text-white alacak */}
+          <h2 className="text-3xl font-extrabold mb-12 relative pb-6">
             Bize Ulaşın
-            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-28 h-1.5 bg-white rounded-full"></span> {/* bg-blue-600 -> bg-white */}
+            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-28 h-1.5 bg-white rounded-full"></span>
           </h2>
 
           {/* İletişim Bilgileri (Telefon ve E-posta ikonlarla) */}
-          <div className="flex flex-col md:flex-row items-center justify-center space-y-6 md:space-y-0 md:space-x-12 text-xl mb-16"> {/* text-gray-700 kaldırıldı */}
+          <div className="flex flex-col md:flex-row items-center justify-center space-y-6 md:space-y-0 md:space-x-12 text-xl mb-16">
             <p className="flex items-center">
-              <Phone className="mr-3 text-white" size={28} /> Telefon:{" "} {/* text-blue-600 -> text-white */}
-              <a href="tel:+905373235900" className="text-blue-200 hover:underline ml-2 font-semibold">0537 323 5900</a> {/* text-blue-600 -> text-blue-200 */}
+              <Phone className="mr-3 text-white" size={28} /> Telefon:{" "}
+              <a href="tel:+905373235900" className="text-blue-200 hover:underline ml-2 font-semibold">0537 323 5900</a>
             </p>
             <p className="flex items-center">
-              <Mail className="mr-3 text-white" size={28} /> E-posta:{" "} {/* text-blue-600 -> text-white */}
-              <a href="mailto:zamtainsaat@gmail.com" className="text-blue-200 hover:underline ml-2 font-semibold">zamtainsaat@gmail.com</a> {/* text-blue-600 -> text-blue-200 */}
+              <Mail className="mr-3 text-white" size={28} /> E-posta:{" "}
+              <a href="mailto:zamtainsaat@gmail.com" className="text-blue-200 hover:underline ml-2 font-semibold">zamtainsaat@gmail.com</a>
             </p>
           </div>
 
           {/* Sosyal Medya Hesapları */}
           <div className="mt-12 mb-16">
-            <h3 className="text-3xl font-bold mb-6">Sosyal Medya Hesaplarımız</h3> {/* text-gray-800 kaldırıldı */}
-            <div className="flex justify-center space-x-8 text-blue-200"> {/* text-blue-600 -> text-blue-200 */}
+            <h3 className="text-3xl font-bold mb-6">Sosyal Medya Hesaplarımız</h3>
+            <div className="flex justify-center space-x-8 text-blue-200">
               <a href="https://www.instagram.com/zemtainsaat" target="_blank" rel="noopener noreferrer" className="hover:text-white transition duration-300 text-xl font-medium">
                 Instagram
               </a>
@@ -625,9 +546,9 @@ export default function Home() {
 
             {/* Başarı Mesajı */}
             {showSuccessMessage && (
-              <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg flex items-center">
+              <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-lg flex items-center animate-fadeInOut">
                 <CheckCircle className="mr-3" size={24} />
-                <span>Talebiniz başarıyla alınmıştır. En kısa sürede sizinle iletişime geçeceğiz.</span>
+                <span>Talebiniz başarıyla iletilmiştir.</span>
               </div>
             )}
 
@@ -710,11 +631,12 @@ export default function Home() {
                         name={`question-${index}`}
                         value={answers[index] || ""}
                         onChange={(e) => handleAnswerChange(index, e.target.value)}
-                        className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
+                        className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900 placeholder-gray-700"
+                        placeholder="Cevabınızı buraya yazın..."
                         required
                       />
                       {formErrors[`question-${index}`] && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors[`question-${index}`]}</p>
+                          <p className="text-red-500 text-sm mt-1">{formErrors[`question-${index}`]}</p>
                       )}
                     </div>
                   ))}
@@ -728,10 +650,11 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={handleSubmit} // Doğrulama handleSubmit içinde yapılacak
+                      onClick={handleSubmit}
                       className={`px-8 py-4 rounded-xl font-bold text-lg transition duration-300 ${
                         isStep3Complete ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md" : "bg-gray-300 text-gray-600 cursor-not-allowed"
                       }`}
+                      disabled={!isStep3Complete || isSubmitting}
                     >
                       Devam <ChevronRight className="inline-block ml-3" size={22} />
                     </button>
@@ -753,11 +676,12 @@ export default function Home() {
                       name="name"
                       value={contactInfo.name}
                       onChange={handleContactInfoChange}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900 placeholder-gray-700"
+                      placeholder="Adınız Soyadınız"
                       required
                     />
                     {formErrors.name && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+                        <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
                     )}
                   </div>
                   <div className="mb-6">
@@ -765,16 +689,17 @@ export default function Home() {
                       E-posta
                     </label>
                     <input
-                      type="email" // type email yapıldı
+                      type="email"
                       id="email"
                       name="email"
                       value={contactInfo.email}
                       onChange={handleContactInfoChange}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900 placeholder-gray-700"
+                      placeholder="ornek@email.com"
                       required
                     />
                     {formErrors.email && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                        <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
                     )}
                   </div>
                   <div className="mb-6">
@@ -782,16 +707,17 @@ export default function Home() {
                       Telefon Numarası
                     </label>
                     <input
-                      type="tel" // type tel yapıldı
+                      type="tel"
                       id="phone"
                       name="phone"
                       value={contactInfo.phone}
                       onChange={handleContactInfoChange}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900 placeholder-gray-700"
+                      placeholder="5xx xxx xx xx"
                       required
                     />
                     {formErrors.phone && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
+                        <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
                     )}
                   </div>
                   <div className="mb-6">
@@ -804,11 +730,12 @@ export default function Home() {
                       value={contactInfo.message}
                       onChange={handleContactInfoChange}
                       rows="6"
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900" // text-gray-900 eklendi
+                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900 placeholder-gray-700"
+                      placeholder="Projeniz hakkında detayları buraya yazın..."
                       required
                     ></textarea>
                     {formErrors.message && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.message}</p>
+                        <p className="text-red-500 text-sm mt-1">{formErrors.message}</p>
                     )}
                   </div>
                   <div className="flex justify-between mt-8">
@@ -821,10 +748,11 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={handleSubmit} // Doğrulama handleSubmit içinde yapılacak
+                      onClick={handleSubmit}
                       className={`px-8 py-4 rounded-xl font-bold text-lg transition duration-300 ${
                         isStep4Complete ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md" : "bg-gray-300 text-gray-600 cursor-not-allowed"
                       }`}
+                      disabled={!isStep4Complete || isSubmitting}
                     >
                       Devam <ChevronRight className="inline-block ml-3" size={22} />
                     </button>
@@ -839,33 +767,25 @@ export default function Home() {
 
                   <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
                     <h4 className="text-xl font-bold text-blue-800 mb-4">Seçilen Hizmetler:</h4>
-                    <p className="text-lg text-gray-800 mb-2">
+                    <p className="text-lg text-gray-900 mb-2">
                       <span className="font-semibold">Ana Hizmet:</span> {selectedMainService}
                     </p>
-                    <p className="text-lg text-gray-800 mb-4">
+                    <p className="text-lg text-gray-900 mb-4">
                       <span className="font-semibold">Alt Hizmet:</span> {selectedSubService}
                     </p>
 
-                    <h4 className="text-xl font-bold text-blue-800 mb-4">Hizmete Özel Cevaplar:</h4>
+                    <h4 className="text-xl font-bold text-blue-800 mt-6 mb-3">Hizmete Özel Cevaplar:</h4>
                     {currentQuestions.map((question, index) => (
-                      <p key={index} className="text-lg text-gray-800 mb-2">
-                        <span className="font-semibold">{question}:</span> {answers[index]}
+                      <p key={index} className="text-md text-gray-700">
+                        <span className="font-semibold">Soru {parseInt(index) + 1}:</span> {answers[index]}
                       </p>
                     ))}
 
-                    <h4 className="text-xl font-bold text-blue-800 mt-6 mb-4">İletişim Bilgileri:</h4>
-                    <p className="text-lg text-gray-800 mb-2">
-                      <span className="font-semibold">İsim Soyisim:</span> {contactInfo.name}
-                    </p>
-                    <p className="text-lg text-gray-800 mb-2">
-                      <span className="font-semibold">E-posta:</span> {contactInfo.email}
-                    </p>
-                    <p className="text-lg text-gray-800 mb-2">
-                      <span className="font-semibold">Telefon:</span> {contactInfo.phone}
-                    </p>
-                    <p className="text-lg text-gray-800 mb-2">
-                      <span className="font-semibold">Mesaj:</span> {contactInfo.message}
-                    </p>
+                    <h4 className="text-xl font-bold text-blue-800 mt-6 mb-3">İletişim Bilgileri:</h4>
+                    <p className="text-lg"><span className="font-semibold">İsim Soyisim:</span> {contactInfo.name}</p>
+                    <p className="text-lg"><span className="font-semibold">E-posta:</span> {contactInfo.email}</p>
+                    <p className="text-lg"><span className="font-semibold">Telefon:</span> {contactInfo.phone}</p>
+                    <p className="text-lg"><span className="font-semibold">Mesaj:</span> {contactInfo.message}</p>
                   </div>
 
                   <div className="flex justify-between mt-8">
@@ -877,10 +797,21 @@ export default function Home() {
                       Geri Dön &amp; Düzenle
                     </button>
                     <button
-                      type="submit"
+                      type="submit" // Bu butonun type'ı submit olmalı
                       className="px-8 py-4 rounded-xl font-bold text-lg transition duration-300 bg-green-600 text-white hover:bg-green-700 shadow-md"
+                      disabled={!isStep4Complete || isSubmitting}
                     >
-                      Talebi Onayla ve Gönder
+                      {isSubmitting ? (
+                        <span className="flex items-center">
+                          <svg className="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Gönderiliyor...
+                        </span>
+                      ) : (
+                        "Talebi Onayla ve Gönder"
+                      )}
                     </button>
                   </div>
                 </div>
@@ -890,152 +821,449 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Yönetici Giriş ve Panel Bölümü */}
-      <section className="py-20 px-8 bg-gray-100 w-full" id="admin-section">
-        <div className="max-w-5xl mx-auto text-center">
-          <h2 className="text-5xl font-extrabold mb-12 text-gray-900 relative pb-6">
-            Yönetici Paneli
-            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-28 h-1.5 bg-blue-600 rounded-full"></span>
-          </h2>
-
-          {!isAuthReady ? (
-            <p className="text-gray-700 text-lg mb-8">Yükleniyor... (Kimlik doğrulama bekleniyor)</p>
-          ) : (
-            !isAdminLoggedIn ? (
-              <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-md mx-auto border border-gray-200">
-                <h3 className="text-3xl font-bold text-gray-800 mb-6">Yönetici Girişi</h3>
-                <form onSubmit={handleAdminLogin}>
-                  <div className="mb-6">
-                    <label htmlFor="adminEmail" className="block text-gray-700 text-xl font-medium mb-3 text-left">
-                      E-posta
-                    </label>
-                    <input
-                      type="email"
-                      id="adminEmail"
-                      name="adminEmail"
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900"
-                      required
-                    />
-                  </div>
-                  <div className="mb-6">
-                    <label htmlFor="adminPassword" className="block text-gray-700 text-xl font-medium mb-3 text-left">
-                      Şifre
-                    </label>
-                    <input
-                      type="password"
-                      id="adminPassword"
-                      name="adminPassword"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900"
-                      required
-                    />
-                  </div>
-                  {adminLoginError && (
-                    <p className="text-red-500 text-sm mb-4">{adminLoginError}</p>
-                  )}
-                  <button
-                    type="submit"
-                    className="w-full px-8 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition duration-300 flex items-center justify-center text-lg shadow-md"
-                  >
-                    <LogIn size={22} className="mr-2" /> Giriş Yap
-                  </button>
-                </form>
-              </div>
-            ) : ( // Admin giriş yapmışsa paneli göster
-              <div>
-                <div className="flex justify-center mb-8">
-                  <button
-                    onClick={handleAdminLogout}
-                    className="px-8 py-4 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition duration-300 flex items-center justify-center text-lg shadow-md"
-                  >
-                    <LogOut size={22} className="mr-2" /> Çıkış Yap
-                  </button>
-                </div>
-                <h3 className="text-3xl font-bold text-gray-800 mb-6">Gönderilen Talepler</h3>
-                {requests.length === 0 ? (
-                  <p className="text-gray-700 text-lg">Henüz gönderilmiş bir talep bulunmamaktadır.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {requests.map((request) => (
-                      <div key={request.id} className="bg-white p-6 rounded-lg shadow-md text-left border border-gray-200">
-                        <p className="text-lg font-semibold text-gray-800 mb-2">
-                          <span className="font-bold">Ana Hizmet:</span> {request.mainService}
-                        </p>
-                        <p className="text-md text-gray-700 mb-4">
-                          <span className="font-bold">Alt Hizmet:</span> {request.subService}
-                        </p>
-                        <p className="text-sm text-gray-500 mb-4">
-                          Gönderilme Tarihi: {request.timestamp ? format(new Date(request.timestamp), 'dd.MM.yyyy HH:mm') : 'N/A'}
-                        </p>
-                        <p className="text-sm text-gray-500 mb-4">
-                          Gönderen Kullanıcı ID: {request.submitterUserId}
-                        </p>
-                        <div className="flex justify-end space-x-3">
-                          <button
-                            onClick={() => handleViewDetails(request)}
-                            className="flex items-center px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
-                          >
-                            <Eye size={18} className="mr-1" /> Detayları Gör
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRequest(request.id)}
-                            className="flex items-center px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm"
-                          >
-                            <Trash2 size={18} className="mr-1" /> Sil
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          )}
-        </div>
-      </section>
-
-      {/* Talep Detayları Modalı */}
-      {selectedRequestDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-8 rounded-lg shadow-xl max-w-lg w-full relative">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6">Talep Detayları</h3>
-            <div className="mb-4 text-gray-800"> {/* Metin rengi düzeltildi */}
-              <p className="text-lg mb-2"><span className="font-semibold">Ana Hizmet:</span> {selectedRequestDetails.mainService}</p>
-              <p className="text-lg mb-2"><span className="font-semibold">Alt Hizmet:</span> {selectedRequestDetails.subService}</p>
-              <p className="text-lg mb-2"><span className="font-semibold">İsim Soyisim:</span> {selectedRequestDetails.contactInfo.name}</p>
-              <p className="text-lg mb-2"><span className="font-semibold">E-posta:</span> {selectedRequestDetails.contactInfo.email}</p>
-              <p className="text-lg mb-2"><span className="font-semibold">Telefon:</span> {selectedRequestDetails.contactInfo.phone}</p>
-              <p className="text-lg mb-2"><span className="font-semibold">Mesaj:</span> {selectedRequestDetails.contactInfo.message}</p>
-              <p className="text-lg mb-2"><span className="font-semibold">Gönderilme:</span> {selectedRequestDetails.timestamp ? format(new Date(selectedRequestDetails.timestamp), 'dd.MM.yyyy HH:mm') : 'N/A'}</p>
-              <p className="text-lg mb-2"><span className="font-semibold">Gönderen Kullanıcı ID:</span> {selectedRequestDetails.submitterUserId}</p>
-
-              <h4 className="text-xl font-bold text-gray-700 mt-4 mb-2">Hizmete Özel Cevaplar:</h4>
-              {Object.keys(selectedRequestDetails.answers).map((key, index) => (
-                <p key={index} className="text-md mb-1">
-                  <span className="font-semibold">{servicesData[selectedRequestDetails.mainService]?.subCategories.find(s => s.name === selectedRequestDetails.subService)?.questions[key] || `Soru ${parseInt(key) + 1}`}:</span> {selectedRequestDetails.answers[key]}
-                </p>
-              ))}
-            </div>
-            <button
-              onClick={handleCloseDetails}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-            >
-              <XCircle size={24} />
-            </button>
-          </div>
-        </div>
-      )}
-
-
       {/* Alt Kısım (Footer) */}
-      <footer className="py-10 bg-blue-800 text-white text-center text-md w-full"> {/* bg-gray-900 yerine bg-blue-800 yapıldı */}
+      <footer className="py-10 bg-blue-800 text-white text-center text-md w-full">
         <p>&copy; {new Date().getFullYear()} Zemta İnşaat ve Hafriyat. Tüm Hakları Saklıdır.</p>
         <p className="mt-2 text-sm opacity-80">Modern Web Tasarımı ile güçlendirilmiştir.</p>
+        {/* GEÇİCİ YÖNETİCİ PANELİ LİNKİ - Hata ayıklama için eklenmiştir. */}
+        {/* <div className="mt-4">
+          <Link href="/admin" className="text-blue-300 hover:underline">
+            Yönetici Paneline Git (Geçici)
+          </Link>
+        </div> */}
       </footer>
 
+      {/* CSS for fadeInOut animation */}
+      <style jsx>{`
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translateY(-10px); }
+          10% { opacity: 1; transform: translateY(0); }
+          90% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-10px); }
+        }
+        .animate-fadeInOut {
+          animation: fadeInOut 10s ease-in-out forwards;
+        }
+
+        /* Hero bölümü için fadeInUp animasyonu */
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fadeInUp {
+          animation: fadeInUp 1s ease-out forwards;
+        }
+      `}</style>
     </main>
+  );
+}
+
+
+// --- AdminLoginPage Bileşeni ---
+function AdminLoginPage({ auth, router }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("[Admin Login] Kullanıcı zaten giriş yapmış, admin paneline yönlendiriliyor.");
+        router.push("/admin");
+      }
+    });
+    return () => unsubscribe();
+  }, [router, auth]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (!auth) {
+        throw new Error("Firebase Auth başlatılamadı. Lütfen konsolu kontrol edin.");
+      }
+      console.log(`[Admin Login] Giriş denemesi: ${email}`);
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log("[Admin Login] Giriş başarılı!");
+    } catch (err) {
+      console.error("[Admin Login ERROR] Giriş hatası:", err);
+      let errorMessage = "Giriş başarısız oldu. Lütfen e-posta ve şifrenizi kontrol edin.";
+      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        errorMessage = "Geçersiz e-posta veya şifre.";
+      } else if (err.code === "auth/too-many-requests") {
+        errorMessage = "Çok fazla başarısız giriş denemesi. Lütfen daha sonra tekrar deneyin.";
+      } else if (err.code === "auth/network-request-failed") {
+        errorMessage = "Ağ hatası. Lütfen internet bağlantınızı kontrol edin.";
+      }
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-700 to-blue-500 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md text-center border-t-4 border-blue-600">
+        <h1 className="text-4xl font-extrabold text-gray-800 mb-6">Yönetici Girişi</h1>
+        <p className="text-gray-600 mb-8">Lütfen yönetici hesabınızla giriş yapın.</p>
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="sr-only">E-posta</label>
+            <input
+              type="email"
+              id="email"
+              placeholder="E-posta Adresi"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900 placeholder-gray-500"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="sr-only">Şifre</label>
+            <input
+              type="password"
+              id="password"
+              placeholder="Şifre"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-5 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-3 focus:ring-blue-500 text-lg text-gray-900 placeholder-gray-500"
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg flex items-center">
+              <AlertCircle className="mr-3" size={24} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="w-full px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 text-lg flex items-center justify-center"
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader className="animate-spin mr-3" size={24} />
+            ) : (
+              "Giriş Yap"
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+// --- AdminPage Bileşeni ---
+function AdminPage({ auth, db, router, __app_id }) {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [user, setUser] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState(null);
+
+  useEffect(() => {
+    console.log("[Admin Auth Init] Auth durumu dinleniyor...");
+    if (!auth) {
+      console.error("[Admin Auth Init ERROR] Firebase Auth nesnesi (auth) başlatılamadı veya tanımsız. Lütfen kontrol edin.");
+      setError("Firebase kimlik doğrulama servisi başlatılamadı. Lütfen konsolu kontrol edin.");
+      setIsAuthReady(true);
+      return;
+    }
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        console.log("[Admin Auth] Kullanıcı oturum açtı:", currentUser.uid);
+      } else {
+        setUser(null);
+        console.log("[Admin Auth] Kullanıcı oturum açmadı, giriş sayfasına yönlendiriliyor.");
+        router.push("/admin/login");
+      }
+      setIsAuthReady(true);
+      console.log("[Admin Auth] isAuthReady true olarak ayarlandı.");
+    });
+
+    return () => unsubscribeAuth();
+  }, [router, auth]);
+
+  useEffect(() => {
+    console.log("[Admin Data Fetch Effect] isAuthReady:", isAuthReady, "user:", user, "db:", db);
+    if (!isAuthReady || !user) {
+      console.log("[Admin Data Fetch] Firebase Auth henüz hazır değil veya kullanıcı giriş yapmadı. Veri çekme bekleniyor.");
+      setLoading(false);
+      return;
+    }
+    if (!db) {
+      console.error("[Admin Data Fetch ERROR] Firebase Firestore nesnesi (db) başlatılamadı veya tanımsız. Lütfen kontrol edin.");
+      setError("Firebase veritabanı servisi başlatılamadı. Lütfen konsolu kontrol edin.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const currentAppId = typeof __app_id !== 'undefined' ? String(__app_id) : 'default-app-id';
+    const collectionPath = `artifacts/${currentAppId}/requests`;
+    console.log(`[Admin Data Fetch] Firestore koleksiyon yolu: ${collectionPath}`);
+
+    const q = collection(db, collectionPath);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log("[Admin Data Fetch] onSnapshot tetiklendi.");
+      const fetchedRequests = [];
+      snapshot.forEach((doc) => {
+        fetchedRequests.push({ id: doc.id, ...doc.data() });
+      });
+
+      fetchedRequests.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      setRequests(fetchedRequests);
+      setLoading(false);
+      console.log(`[Admin Data Fetch] ${fetchedRequests.length} talep başarıyla çekildi.`);
+    }, (err) => {
+      console.error("[Admin Data Fetch ERROR] Firestore'dan veri çekilirken hata:", err);
+      setError("Talepler yüklenirken bir hata oluştu: " + err.message);
+      setLoading(false);
+    });
+
+    return () => {
+      console.log("[Admin Data Fetch] onSnapshot listener temizlendi.");
+      unsubscribe();
+    };
+  }, [isAuthReady, user, db, __app_id]);
+
+  const handleRefresh = () => {
+    setLoading(true);
+    setRequests([]);
+    console.log("[Admin Refresh] Talepler yenileniyor...");
+  };
+
+  const handleDeleteClick = (request) => {
+    setRequestToDelete(request);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!requestToDelete) return;
+
+    setShowDeleteConfirm(false);
+    setLoading(true);
+    setError(null);
+
+    const currentAppId = typeof __app_id !== 'undefined' ? String(__app_id) : 'default-app-id';
+    const docPath = `artifacts/${currentAppId}/requests/${requestToDelete.id}`;
+    console.log(`[Admin Delete] Belge siliniyor: ${docPath}`);
+
+    try {
+      if (!db) {
+        throw new Error("Firestore veritabanı başlatılmamış.");
+      }
+      await deleteDoc(doc(db, docPath));
+      console.log(`[Admin Delete] Belge başarıyla silindi: ${requestToDelete.id}`);
+    } catch (err) {
+      console.error("[Admin Delete ERROR] Belge silinirken hata:", err);
+      setError("Talep silinirken bir hata oluştu: " + err.message);
+    } finally {
+      setLoading(false);
+      setRequestToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setRequestToDelete(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (!auth) {
+        throw new Error("Firebase Auth başlatılamadı. Çıkış yapılamıyor.");
+      }
+      await signOut(auth);
+      console.log("[Admin Logout] Başarıyla çıkış yapıldı.");
+      router.push("/admin/login");
+    } catch (err) {
+      console.error("[Admin Logout ERROR] Çıkış yapılırken hata:", err);
+      setError("Çıkış yapılırken bir hata oluştu: " + err.message);
+    }
+  };
+
+  if (!isAuthReady || (isAuthReady && !user && !error)) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center text-blue-600 text-2xl flex items-center">
+          <Loader className="animate-spin mr-3" size={32} />
+          Yönetici Paneli Yükleniyor veya Kimlik Doğrulanıyor...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-6 rounded-lg shadow-md max-w-md text-center">
+          <p className="font-bold text-xl mb-3">Yükleme Hatası!</p>
+          <p className="mb-4">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-full"
+          >
+            Yeniden Dene
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-xl">
+        <h1 className="text-4xl font-extrabold text-center text-blue-700 mb-8">Yönetici Paneli</h1>
+
+        <div className="flex justify-between items-center mb-6">
+          <button
+            onClick={handleRefresh}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full flex items-center"
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader className="animate-spin mr-2" size={20} />
+            ) : (
+              "Talepleri Yenile"
+            )}
+          </button>
+          <button
+            onClick={handleLogout}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-full flex items-center"
+          >
+            <LogOut className="mr-2" size={20} /> Çıkış Yap
+          </button>
+        </div>
+
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Gönderilen Talepler</h2>
+
+        {!loading && requests.length === 0 && (
+          <div className="text-center text-gray-500 text-lg mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            Henüz gönderilmiş bir talep bulunmamaktadır.
+          </div>
+        )}
+
+        {!loading && requests.length > 0 && (
+          <div className="space-y-6">
+            {requests.map((request) => (
+              <div key={request.id} className="bg-blue-50 p-6 rounded-lg shadow-md border border-blue-200">
+                <h3 className="text-xl font-bold text-blue-800 mb-2">Ana Hizmet: {request.mainService}</h3>
+                <p className="text-lg text-gray-800 mb-3">Alt Hizmet: {request.subService}</p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Gönderilme Tarihi: {new Date(request.timestamp).toLocaleString('tr-TR')}
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Gönderen Kullanıcı ID: <span className="font-mono text-xs bg-gray-200 px-2 py-1 rounded">{request.submitterUserId}</span>
+                </p>
+
+                <div className="flex space-x-3 mt-4">
+                  <button
+                    onClick={() => setSelectedRequest(request)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-full flex items-center transition duration-300"
+                  >
+                    <Eye className="mr-2" size={18} /> Detayları Gör
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(request)}
+                    className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-full flex items-center transition duration-300"
+                  >
+                    <Trash2 className="mr-2" size={18} /> Sil
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Talep Detay Modalı */}
+        {selectedRequest && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-8 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">Talep Detayları</h3>
+              <div className="space-y-4">
+                <p className="text-lg"><span className="font-semibold">Ana Hizmet:</span> {selectedRequest.mainService}</p>
+                <p className="text-lg"><span className="font-semibold">Alt Hizmet:</span> {selectedRequest.subService}</p>
+                <p className="text-lg"><span className="font-semibold">Gönderilme Tarihi:</span> {new Date(selectedRequest.timestamp).toLocaleString('tr-TR')}</p>
+                <p className="text-lg"><span className="font-semibold">Gönderen Kullanıcı ID:</span> <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{selectedRequest.submitterUserId}</span></p>
+
+                <h4 className="text-xl font-bold text-gray-700 mt-6 mb-3">Hizmete Özel Cevaplar:</h4>
+                {selectedRequest.answers && Object.keys(selectedRequest.answers).map((key) => (
+                  <p key={key} className="text-md text-gray-700">
+                    <span className="font-semibold">Soru {parseInt(key) + 1}:</span> {selectedRequest.answers[key]}
+                  </p>
+                ))}
+
+                <h4 className="text-xl font-bold text-gray-700 mt-6 mb-3">İletişim Bilgileri:</h4>
+                <p className="text-lg"><span className="font-semibold">İsim Soyisim:</span> {selectedRequest.contactInfo.name}</p>
+                <p className="text-lg"><span className="font-semibold">E-posta:</span> {selectedRequest.contactInfo.email}</p>
+                <p className="text-lg"><span className="font-semibold">Telefon:</span> {selectedRequest.contactInfo.phone}</p>
+                <p className="text-lg"><span className="font-semibold">Mesaj:</span> {selectedRequest.contactInfo.message}</p>
+              </div>
+              <button
+                onClick={() => setSelectedRequest(null)}
+                className="mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Silme Onayı Modalı */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-8 rounded-lg shadow-xl max-w-sm w-full text-center">
+              <h3 className="text-xl font-bold text-red-700 mb-4">Talebi Sil Onayı</h3>
+              <p className="text-gray-700 mb-6">
+                Bu talebi kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+              </p>
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={cancelDelete}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-5 rounded-full transition duration-300"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-full transition duration-300"
+                >
+                  Sil
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
